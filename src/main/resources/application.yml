@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: fashion-search-engine
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/fashion_search}
+    username: ${DB_USERNAME:fashion}
+    password: ${DB_PASSWORD:fashion}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+
+ebay:
+  api-base-url: ${EBAY_API_BASE_URL:https://api.ebay.com}
+  client-id: ${EBAY_CLIENT_ID:}
+  client-secret: ${EBAY_CLIENT_SECRET:}
+  marketplace-id: ${EBAY_MARKETPLACE_ID:EBAY_US}
+  search-keywords:
+    - leather jacket
+    - cardigan
+    - dress
+    - sneakers
+  page-size: ${EBAY_PAGE_SIZE:50}
+  max-pages: ${EBAY_MAX_PAGES:2}
+
+import:
+  token: ${IMPORT_TOKEN:}

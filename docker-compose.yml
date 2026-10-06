@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: fashion_search
+      POSTGRES_USER: fashion
+      POSTGRES_PASSWORD: fashion
+    ports:
+      - "5432:5432"
+    volumes:
+      - fashion_search_pgdata:/var/lib/postgresql/data
+
+volumes:
+  fashion_search_pgdata:

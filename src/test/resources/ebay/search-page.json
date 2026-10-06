@@ -1,0 +1,53 @@
+{
+  "href": "https://api.ebay.com/buy/browse/v1/item_summary/search?q=leather+jacket&limit=50&offset=0",
+  "total": 120,
+  "next": "https://api.ebay.com/buy/browse/v1/item_summary/search?q=leather+jacket&limit=50&offset=50",
+  "limit": 50,
+  "offset": 0,
+  "itemSummaries": [
+    {
+      "itemId": "v1|111|0",
+      "title": "Black Cropped Leather Jacket",
+      "shortDescription": "Fitted minimal leather jacket",
+      "adultOnly": false,
+      "leafCategoryIds": ["15724"],
+      "categories": [
+        {
+          "categoryId": "11450",
+          "categoryName": "Clothing, Shoes & Accessories"
+        },
+        {
+          "categoryId": "15724",
+          "categoryName": "Coats, Jackets & Vests"
+        },
+        {
+          "categoryId": "999",
+          "categoryName": "Not The Leaf"
+        }
+      ],
+      "price": {
+        "value": "129.50",
+        "currency": "USD"
+      },
+      "image": {
+        "imageUrl": "https://example.com/jacket.jpg"
+      },
+      "itemWebUrl": "https://www.ebay.com/itm/111"
+    },
+    {
+      "itemId": "v1|222|0",
+      "title": "Wool Cardigan",
+      "categories": [
+        {
+          "categoryId": "1",
+          "categoryName": "Sweaters"
+        }
+      ],
+      "price": {
+        "value": "40",
+        "currency": "usd"
+      },
+      "itemWebUrl": "https://www.ebay.com/itm/222"
+    }
+  ]
+}
