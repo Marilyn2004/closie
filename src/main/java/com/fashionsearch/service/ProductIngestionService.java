@@ -21,6 +21,8 @@ public class ProductIngestionService {
 
     public static final String EBAY_SOURCE = "ebay";
 
+    private final com.fashionsearch.catalog.CatalogNormalizer normalizer = new com.fashionsearch.catalog.CatalogNormalizer();
+
     private static final int TITLE_MAX_LENGTH = 500;
 
     private static final int EXTERNAL_ID_MAX_LENGTH = 255;
@@ -29,7 +31,7 @@ public class ProductIngestionService {
 
     private static final int MAX_EBAY_PAGE_SIZE = 200;
 
-    private final EbayClient ebayClient;
+    private final java.util.List<com.fashionsearch.catalog.ProductSource> sources;
 
     private final EbayProperties ebayProperties;
 
@@ -43,10 +45,17 @@ public class ProductIngestionService {
             ProductRepository productRepository,
             TransactionOperations transactions
     ) {
-        this.ebayClient = ebayClient;
+        this.sources = java.util.List.of(new com.fashionsearch.catalog.EbayProductSource(ebayClient));
         this.ebayProperties = ebayProperties;
         this.productRepository = productRepository;
         this.transactions = transactions;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ProductIngestionService(java.util.List<com.fashionsearch.catalog.ProductSource> sources,
+            EbayProperties properties,ProductRepository repository,TransactionOperations transactions) {
+        this.sources=java.util.List.copyOf(sources); this.ebayProperties=properties;
+        this.productRepository=repository; this.transactions=transactions;
     }
 
     public ImportResult importFashionProducts() {
@@ -59,13 +68,14 @@ public class ProductIngestionService {
         int created = 0;
         int updated = 0;
         int skipped = 0;
+        for (var source : sources) {
         for (String keyword : ebayProperties.getSearchKeywords()) {
             if (keyword == null || keyword.isBlank()) {
                 continue;
             }
             for (int page = 0; page < maxPages; page++) {
-                EbaySearchPage searchPage = ebayClient.search(keyword, page * pageSize);
-                ImportResult pageResult = transactions.execute(status -> persist(searchPage.products()));
+                var searchPage = source.fetch(keyword, page * pageSize);
+                ImportResult pageResult = transactions.execute(status -> persist(source.source(), searchPage.products()));
                 if (pageResult == null) {
                     throw new IllegalStateException("product import transaction did not complete");
                 }
@@ -77,30 +87,40 @@ public class ProductIngestionService {
                 }
             }
         }
+        }
         return new ImportResult(created, updated, skipped);
     }
 
-    private ImportResult persist(List<EbayProduct> ebayProducts) {
+    private ImportResult persist(String source, List<com.fashionsearch.catalog.SourceProduct> ebayProducts) {
         int created = 0;
         int updated = 0;
         int skipped = 0;
-        for (EbayProduct ebayProduct : ebayProducts) {
-            Optional<Product> mapped = map(ebayProduct);
+        for (var item : ebayProducts) {
+            Optional<Product> mapped = item == null ? Optional.empty() : map(new EbayProduct(item.externalId(),item.title(),item.description(),item.category(),item.price(),item.currency(),item.imageUrl(),item.productUrl()));
             if (mapped.isEmpty()) {
                 skipped++;
                 continue;
             }
             Product incoming = mapped.get();
             Optional<Product> existing = productRepository.findBySourceAndExternalId(
-                    EBAY_SOURCE,
+                    source,
                     incoming.getExternalId()
             );
+            incoming.setSource(source);
+            normalizer.enrich(incoming, item);
+            incoming.setLastSeenAt(java.time.Instant.now());
             if (existing.isEmpty()) {
                 productRepository.saveAndFlush(incoming);
                 created++;
                 continue;
             }
             Product current = existing.get();
+            current.setLastSeenAt(incoming.getLastSeenAt());
+            current.setOutfitSlot(incoming.getOutfitSlot());
+            current.setRetailer(incoming.getRetailer());
+            current.setBrand(incoming.getBrand()); current.setColor(incoming.getColor());
+            current.setAvailableSizes(incoming.getAvailableSizes()); current.setAvailability(incoming.getAvailability());
+            current.setStyleTags(incoming.getStyleTags()); current.setOccasionTags(incoming.getOccasionTags());
             if (applyChanges(current, incoming)) {
                 productRepository.saveAndFlush(current);
                 updated++;

@@ -113,7 +113,7 @@ public class EbayClient {
                 + "&offset=" + offset
                 + "&fieldgroups=EXTENDED"
                 + "&filter=" + URLEncoder.encode(FIXED_PRICE_FILTER, StandardCharsets.UTF_8);
-        return URI.create("/buy/browse/v1/item_summary/search?" + query);
+        return URI.create(normalizeBaseUrl(properties.getApiBaseUrl()) + "/buy/browse/v1/item_summary/search?" + query);
     }
 
     private List<EbayProduct> toProducts(List<ItemSummary> summaries) {

@@ -26,8 +26,26 @@ ebay:
     - cardigan
     - dress
     - sneakers
+    - trousers
+    - blouse
+    - necklace
+    - earrings
   page-size: ${EBAY_PAGE_SIZE:50}
   max-pages: ${EBAY_MAX_PAGES:2}
 
 import:
   token: ${IMPORT_TOKEN:}
+
+closie:
+  ai:
+    enabled: ${CLOSIE_AI_ENABLED:false}
+    key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_MODEL:}
+  providers:
+    permitted-sources: ${CLOSIE_PERMITTED_SOURCES:}
+    ebay:
+      display-enabled: ${EBAY_DISPLAY_ENABLED:false}
+
+spring.http.clients:
+  connect-timeout: 10s
+  read-timeout: 20s

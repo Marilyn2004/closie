@@ -63,6 +63,33 @@ public class Product {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "brand", length = 255)
+    private String brand;
+
+    @Column(name = "retailer", length = 255)
+    private String retailer;
+
+    @Column(name = "outfit_slot", length = 30)
+    private String outfitSlot;
+
+    @Column(name = "color", length = 80)
+    private String color;
+
+    @Column(name = "available_sizes", length = Length.LONG32)
+    private String availableSizes;
+
+    @Column(name = "availability", length = 30)
+    private String availability = "UNKNOWN";
+
+    @Column(name = "style_tags", length = Length.LONG32)
+    private String styleTags;
+
+    @Column(name = "occasion_tags", length = Length.LONG32)
+    private String occasionTags;
+
+    @Column(name = "last_seen_at")
+    private Instant lastSeenAt;
+
     public Long getId() {
         return id;
     }
@@ -146,4 +173,22 @@ public class Product {
     public Instant getUpdatedAt() {
         return updatedAt;
     }
+    public String getBrand() { return brand; }
+    public void setBrand(String value) { this.brand = value; }
+    public String getRetailer() { return retailer; }
+    public void setRetailer(String value) { this.retailer = value; }
+    public String getOutfitSlot() { return outfitSlot; }
+    public void setOutfitSlot(String value) { this.outfitSlot = value; }
+    public String getColor() { return color; }
+    public void setColor(String value) { this.color = value; }
+    public String getAvailableSizes() { return availableSizes; }
+    public void setAvailableSizes(String value) { this.availableSizes = value; }
+    public String getAvailability() { return availability; }
+    public void setAvailability(String value) { this.availability = value; }
+    public String getStyleTags() { return styleTags; }
+    public void setStyleTags(String value) { this.styleTags = value; }
+    public String getOccasionTags() { return occasionTags; }
+    public void setOccasionTags(String value) { this.occasionTags = value; }
+    public Instant getLastSeenAt() { return lastSeenAt; }
+    public void setLastSeenAt(Instant value) { this.lastSeenAt = value; }
 }
