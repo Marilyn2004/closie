@@ -1,69 +1,777 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import { api, money, safeUrl, readLocal, writeLocal } from './api';
-import './style.css';
-const categories=[['All finds',''],['Tops & knits','TOP'],['Bottoms','BOTTOM'],['Dresses','ONE_PIECE'],['Shoes','SHOES'],['Jewelry & extras','ACCESSORY'],['Outerwear','OUTERWEAR']];
-const initialFilters={brand:'',color:'',category:'',minPrice:'',maxPrice:'',currency:'USD'};
-function Icon({name,...props}) { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" width="20" height="20" aria-hidden="true" {...props}>{name==='search'?<><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></>:name==='heart'?<path d="M20.7 5.7a5 5 0 0 0-7.1 0L12 7.3l-1.6-1.6a5 5 0 0 0-7.1 7.1L12 21l8.7-8.2a5 5 0 0 0 0-7.1Z"/>:name==='spark'?<><path d="m12 2 2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></>:<path d="M5 12h14m-6-6 6 6-6 6"/>}</svg> }
-function ProductCard({product:p,saved,onSave,onStyle,index=0}) {
- const image=safeUrl(p.imageUrl),url=safeUrl(p.productUrl);const [broken,setBroken]=useState(false);
- return <article className={`product product-${index%4}`}>
-  <div className="product-image">
-   {image&&!broken?<a href={url||undefined} target="_blank" rel="noopener noreferrer"><img loading="lazy" src={image} alt={p.title} onError={()=>setBroken(true)}/></a>:<div className="image-unavailable">Image unavailable</div>}
-   <button className={`save ${saved?'is-saved':''}`} aria-label={`${saved?'Unsave':'Save'} ${p.title}`} aria-pressed={saved} onClick={()=>onSave(p.id)}><Icon name="heart"/></button>
-   <button className="style-this" onClick={()=>onStyle(p)}><Icon name="spark"/> Style this</button>
-  </div>
-  <div className="product-meta"><span>{p.brand||'Brand not provided'}</span><strong>{money(p.price,p.currency)}</strong></div>
-  <h3>{p.title}</h3><div className="retailer-row">{url?<a href={url} target="_blank" rel="noopener noreferrer">View at {p.retailer||p.source} ↗</a>:<span>Link unavailable</span>}<span>{p.availability==='AVAILABLE'?'Provider-reported stock':'Check availability'}</span></div>
- </article>
+import React, { useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { api, money, safeUrl, readLocal, writeLocal } from "./api";
+import "./style.css";
+const categories = [
+  ["All finds", ""],
+  ["Tops & knits", "TOP"],
+  ["Bottoms", "BOTTOM"],
+  ["Dresses", "ONE_PIECE"],
+  ["Shoes", "SHOES"],
+  ["Jewelry & extras", "ACCESSORY"],
+  ["Outerwear", "OUTERWEAR"],
+];
+const initialFilters = {
+  brand: "",
+  color: "",
+  category: "",
+  minPrice: "",
+  maxPrice: "",
+  currency: "USD",
+};
+function Icon({ name, ...props }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      width="20"
+      height="20"
+      aria-hidden="true"
+      {...props}
+    >
+      {name === "search" ? (
+        <>
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m16 16 5 5" />
+        </>
+      ) : name === "heart" ? (
+        <path d="M20.7 5.7a5 5 0 0 0-7.1 0L12 7.3l-1.6-1.6a5 5 0 0 0-7.1 7.1L12 21l8.7-8.2a5 5 0 0 0 0-7.1Z" />
+      ) : name === "spark" ? (
+        <>
+          <path d="m12 2 2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z" />
+        </>
+      ) : (
+        <path d="M5 12h14m-6-6 6 6-6 6" />
+      )}
+    </svg>
+  );
 }
-function App(){
- const [tab,setTab]=useState('Discover'),[products,setProducts]=useState([]),[total,setTotal]=useState(0),[page,setPage]=useState(0),[hasMore,setHasMore]=useState(false);
- const [category,setCategory]=useState(''),[loading,setLoading]=useState(false),[error,setError]=useState('');
- const [saved,setSaved]=useState(()=>{const x=readLocal('closie.saved',[]);return Array.isArray(x)?x:[];}),[onlySaved,setOnlySaved]=useState(false);
- const [prefs,setPrefs]=useState(()=>({...{aesthetic:'',budget:''},...readLocal('closie.preferences',{})})),[showPrefs,setShowPrefs]=useState(false);
- const [message,setMessage]=useState(''),[history,setHistory]=useState([]),[context,setContext]=useState(null),[mode,setMode]=useState('rules');
- const [filters,setFilters]=useState(initialFilters),[anchor,setAnchor]=useState(null),[outfit,setOutfit]=useState(null),[styleMessage,setStyleMessage]=useState(''),[styleBudget,setStyleBudget]=useState('150');
- const requestRef=useRef(null),serial=useRef(0);
- useEffect(()=>{writeLocal('closie.saved',saved)},[saved]);
- useEffect(()=>{writeLocal('closie.preferences',prefs)},[prefs]);
- const startRequest=()=>{requestRef.current?.abort();const controller=new AbortController();requestRef.current=controller;const id=++serial.current;setLoading(true);setError('');return {controller,id};};
- async function discover(nextPage=0){
-  const {controller,id}=startRequest();
-  const params=new URLSearchParams({category,currency:filters.currency,page:nextPage});
-  if(prefs.budget)params.set('maxPrice',prefs.budget);if(prefs.aesthetic)params.set('aesthetic',prefs.aesthetic);
-  try{const data=await api(`/discover?${params}`,undefined,controller.signal);if(serial.current!==id)return;
-   setProducts(nextPage?old=>[...old,...data.results.products]:data.results.products);setTotal(data.results.total);setPage(nextPage);setHasMore(data.results.hasMore);
-  }catch(e){if(e.name!=='AbortError'&&serial.current===id)setError(e.message)}finally{if(serial.current===id)setLoading(false)}
- }
- useEffect(()=>{if(tab==='Discover')discover();else{requestRef.current?.abort();serial.current++;setLoading(false);setError('');}return()=>requestRef.current?.abort();},[tab,category,prefs,filters.currency]);
- const toggleSave=id=>setSaved(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);
- const styleThis=p=>{setAnchor(p);setOutfit(null);setStyleMessage('');setStyleBudget(prefs.budget||'150');setTab('Style')};
- const filterBody=()=>Object.fromEntries(Object.entries(filters).filter(([,v])=>v!=='').map(([k,v])=>[k,k.endsWith('Price')?Number(v):v]));
- async function find(event,nextPage=0,override){
-  event?.preventDefault();const query=override??message;if(!query.trim()&&!context)return;
-  const {controller,id}=startRequest();
-  try{const data=await api('/search',{message:nextPage?'':query,context,filters:filterBody(),page:nextPage},controller.signal);if(serial.current!==id)return;
-   setContext(data.context);setMode(data.interpretationMode);setProducts(nextPage?old=>[...old,...data.results.products]:data.results.products);
-   setTotal(data.results.total);setPage(nextPage);setHasMore(data.results.hasMore);if(!nextPage){setHistory(old=>[...old,query]);setMessage('');}
-  }catch(e){if(e.name!=='AbortError'&&serial.current===id)setError(e.message)}finally{if(serial.current===id)setLoading(false)}
- }
- async function style(event){
-  event.preventDefault();const {controller,id}=startRequest();setOutfit(null);
-  try{const data=await api('/style',{message:styleMessage,context:null,filters:{currency:anchor?.currency||filters.currency,maxPrice:styleBudget===''?null:Number(styleBudget),aesthetic:prefs.aesthetic||null},anchorId:anchor?.id??null},controller.signal);if(serial.current!==id)return;setOutfit(data);setMode(data.interpretationMode)}
-  catch(e){if(e.name!=='AbortError'&&serial.current===id)setError(e.message)}finally{if(serial.current===id)setLoading(false)}
- }
- const displayed=onlySaved?products.filter(p=>saved.includes(p.id)):products;
- const card=(p,i)=><ProductCard key={p.id} product={p} index={i} saved={saved.includes(p.id)} onSave={toggleSave} onStyle={styleThis}/>;
- const changeTab=t=>{if(t==='Find'&&tab!=='Find'){setProducts([]);setTotal(0);setContext(null);setHistory([]);setHasMore(false);}setTab(t);setOnlySaved(false)};
- return <><header className="site-header"><a className="wordmark" href="#" onClick={e=>{e.preventDefault();changeTab('Discover')}}>closie<span>✳</span></a><nav aria-label="Main navigation">{['Discover','Find','Style'].map(t=><button key={t} aria-current={tab===t?'page':undefined} onClick={()=>changeTab(t)}>{t}</button>)}</nav><button className="personal" onClick={()=>setShowPrefs(!showPrefs)}>My style <span className="avatar">C</span></button></header>
- <main>
- {showPrefs&&<section className="preferences" aria-label="My style preferences"><div><span className="eyebrow">MAKE IT YOURS</span><h2>A little more you.</h2><p>Optional preferences, saved on this browser.</p></div><label>Your aesthetic<select value={prefs.aesthetic} onChange={e=>setPrefs({...prefs,aesthetic:e.target.value})}><option value="">Open to anything</option>{['minimalist','feminine','casual','classic','streetwear'].map(x=><option key={x}>{x}</option>)}</select></label><label>Discovery price ceiling<input type="number" min="0" step="0.01" value={prefs.budget} onChange={e=>setPrefs({...prefs,budget:e.target.value})} placeholder="No limit"/></label><button className="text-button" onClick={()=>setShowPrefs(false)}>Done ↗</button></section>}
- {tab==='Discover'&&<><section className="hero"><div><span className="eyebrow">YOUR PERSONAL AI STYLIST</span><h1>Good finds.<br/><em>Very you.</em></h1><p>A new favorite. A fresh combination.<br/>Discover the pieces that feel like you.</p><button className="primary" onClick={()=>changeTab('Find')}>Find your next favorite <Icon name="arrow"/></button></div><div className="hero-note"><span className="orbit">c.</span><p>A wardrobe with<br/><em>your point of view.</em></p><span className="note-small">REAL FINDS · YOUR BUDGET · YOUR STYLE</span></div><div className="hero-caption">A little inspiration, endless possibilities.</div></section><section className="feed-header"><div><span className="eyebrow">THE DISCOVERY EDIT</span><h2>Meet your next favorites<span className="dot">.</span></h2></div><button className={`saved-filter ${onlySaved?'active':''}`} onClick={()=>setOnlySaved(!onlySaved)} aria-pressed={onlySaved}><Icon name="heart"/> Saved in this view ({products.filter(p=>saved.includes(p.id)).length})</button></section><div className="category-row" aria-label="Browse categories">{categories.map(([name,value])=><button key={name} className={category===value?'selected':''} onClick={()=>{setCategory(value);setOnlySaved(false)}}>{name}</button>)}</div><p className="catalog-note">{prefs.aesthetic?`Your ${prefs.aesthetic} edit · `:''}Catalog finds with retailer links. Prices and stock can change.</p></>}
- {tab==='Find'&&<><section className="page-intro"><span className="eyebrow">LESS SCROLLING, MORE FINDING</span><h1>Tell us what <em>you’re after.</em></h1><p>A piece, a feeling, an occasion. Start with what’s on your mind.</p></section><section className="search-panel"><form onSubmit={find}><label className="sr-only" htmlFor="query">Describe what you want</label><div className="query-box"><Icon name="search"/><input id="query" maxLength="1000" value={message} onChange={e=>setMessage(e.target.value)} placeholder={context?'Refine your finds… e.g. Something more feminine':'A minimalist outfit for college under $150'} required={!context}/><button className="primary" disabled={loading}>Find it <Icon name="arrow"/></button></div><div className="filters">{[['brand','Brand'],['color','Color']].map(([k,label])=><label key={k}>{label}<input value={filters[k]} onChange={e=>setFilters({...filters,[k]:e.target.value})} placeholder={`Any ${label.toLowerCase()}`} maxLength="100"/></label>)}<label>Category<select value={filters.category} onChange={e=>setFilters({...filters,category:e.target.value})}>{categories.map(([label,value])=><option key={label} value={value}>{label}</option>)}</select></label>{[['minPrice','Min price'],['maxPrice','Max price']].map(([k,label])=><label key={k}>{label}<input type="number" min="0" step="0.01" value={filters[k]} onChange={e=>setFilters({...filters,[k]:e.target.value})} placeholder="Any"/></label>)}<label>Currency<select value={filters.currency} onChange={e=>setFilters({...filters,currency:e.target.value})}>{['USD','EUR','GBP'].map(c=><option key={c}>{c}</option>)}</select></label></div></form>{history.length>0&&<div className="conversation"><span className="eyebrow">YOUR SEARCH, REFINED</span>{history.map((h,i)=><span className="conversation-chip" key={i}>{h}</span>)}<button className="text-button" onClick={()=>{requestRef.current?.abort();serial.current++;setLoading(false);setContext(null);setHistory([]);setProducts([]);setTotal(0);setHasMore(false);setFilters(initialFilters)}}>Start fresh</button></div>}{context&&<p className="context-line">{[context.category,context.brand,context.color,context.aesthetic,context.occasion,context.maxPrice!=null?`Up to ${money(context.maxPrice,context.currency)}`:null].filter(Boolean).join(' · ')||'All catalog finds'} · {mode==='rules'?'Rules-based interpretation':'AI-assisted interpretation'}</p>}</section>{context&&<div className="results-title"><h2>Your finds</h2><span>{total} matching pieces</span></div>}</>}
- {tab==='Style'&&<><section className="page-intro"><span className="eyebrow">THE ART OF GETTING DRESSED</span><h1>Make it <em>an outfit.</em></h1><p>A little guidance. A complete look. Always within your budget.</p></section><section className="stylist-layout"><form className="stylist-form" onSubmit={style}><span className="eyebrow">YOUR STYLING BRIEF</span><h2>Where are we going?</h2><label>Occasion, aesthetic & preferences<textarea maxLength="1000" rows="4" value={styleMessage} onChange={e=>setStyleMessage(e.target.value)} placeholder="A feminine look for college, relaxed but put together"/></label><div className="budget-row"><label>Total item budget ({anchor?.currency||filters.currency})<input type="number" min="0" step="0.01" required value={styleBudget} onChange={e=>setStyleBudget(e.target.value)}/></label><label>Currency<select disabled={!!anchor} value={anchor?.currency||filters.currency} onChange={e=>setFilters({...filters,currency:e.target.value})}>{['USD','EUR','GBP'].map(c=><option key={c}>{c}</option>)}</select></label></div>{anchor&&<div className="anchor"><p>Starting with <strong>{anchor.title}</strong> · {money(anchor.price,anchor.currency)}</p><button type="button" className="text-button" onClick={()=>setAnchor(null)}>Remove anchor</button></div>}<button className="primary" disabled={loading}>Build my outfit <Icon name="spark"/></button><p className="fine-print">Real catalog pieces. Item prices only, excluding shipping and tax. Check size and stock with the retailer.</p></form><div className="stylist-output">{outfit?<><div className="outfit-title"><span className="eyebrow">{outfit.complete?'YOUR LOOK, TOGETHER':'A START, NOT A COMPLETE LOOK'}</span><h2>{outfit.complete?'Consider it styled.':'A few pieces are missing.'}</h2><strong className="outfit-total">{money(outfit.total,outfit.currency)}</strong><p>{outfit.explanation}</p><span className="mode-label">{mode==='rules'?'Rules-based styling':'AI-assisted preferences · catalog-based styling'}</span></div><div className="outfit-grid">{outfit.products.map(card)}</div></>:<div className="stylist-empty"><Icon name="spark" width="48" height="48"/><h2>Your next look<br/><em>starts here.</em></h2><p>Tell us your plans. We’ll bring the pieces together.</p></div>}</div></section></>}
- {error&&<div className="error" role="alert">{error} <button className="text-button" onClick={()=>tab==='Discover'?discover():setError('')}>{tab==='Discover'?'Try again':'Dismiss'}</button></div>}
- {tab!=='Style'&&<>{loading&&<p role="status" className="status">Finding your next favorites…</p>}{!loading&&!error&&displayed.length===0&&(tab==='Discover'||context)&&<section className="empty"><Icon name="search" width="32" height="32"/><h2>{onlySaved?'Your favorites start with a heart.':'Nothing here just yet.'}</h2><p>{onlySaved?'Save a piece in this view to find it here.':'Try a broader category or a different budget. Only reviewed, current catalog items appear here.'}</p></section>}<div className="product-grid">{displayed.map(card)}</div>{hasMore&&!onlySaved&&<div className="load-more"><button disabled={loading} onClick={()=>tab==='Discover'?discover(page+1):find(null,page+1)}>Discover more ↓</button></div>}</>}
- </main><footer><span className="wordmark">closie<span>✳</span></span><p>Your style. Your pace. Your point of view.</p><span>YOUR PERSONAL AI STYLIST</span></footer></>
+function ProductCard({ product: p, saved, onSave, onStyle, index = 0 }) {
+  const image = safeUrl(p.imageUrl),
+    url = safeUrl(p.productUrl);
+  const [broken, setBroken] = useState(false);
+  return (
+    <article className={`product product-${index % 4}`}>
+      <div className="product-image">
+        {image && !broken ? (
+          <a href={url || undefined} target="_blank" rel="noopener noreferrer">
+            <img
+              loading="lazy"
+              src={image}
+              alt={p.title}
+              onError={() => setBroken(true)}
+            />
+          </a>
+        ) : (
+          <div className="image-unavailable">Image unavailable</div>
+        )}
+        <button
+          className={`save ${saved ? "is-saved" : ""}`}
+          aria-label={`${saved ? "Unsave" : "Save"} ${p.title}`}
+          aria-pressed={saved}
+          onClick={() => onSave(p.id)}
+        >
+          <Icon name="heart" />
+        </button>
+        <button className="style-this" onClick={() => onStyle(p)}>
+          <Icon name="spark" /> Style this
+        </button>
+      </div>
+      <div className="product-meta">
+        <span>{p.brand || "Brand not provided"}</span>
+        <strong>{money(p.price, p.currency)}</strong>
+      </div>
+      <h3>{p.title}</h3>
+      <div className="retailer-row">
+        {url ? (
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            View at {p.retailer || p.source} ↗
+          </a>
+        ) : (
+          <span>Link unavailable</span>
+        )}
+        <span>
+          {p.availability === "AVAILABLE"
+            ? "Provider-reported stock"
+            : "Check availability"}
+        </span>
+      </div>
+    </article>
+  );
 }
-createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
+function App() {
+  const [tab, setTab] = useState("Discover"),
+    [products, setProducts] = useState([]),
+    [total, setTotal] = useState(0),
+    [page, setPage] = useState(0),
+    [hasMore, setHasMore] = useState(false);
+  const [category, setCategory] = useState(""),
+    [loading, setLoading] = useState(false),
+    [error, setError] = useState("");
+  const [saved, setSaved] = useState(() => {
+      const x = readLocal("closie.saved", []);
+      return Array.isArray(x) ? x : [];
+    }),
+    [onlySaved, setOnlySaved] = useState(false);
+  const [prefs, setPrefs] = useState(() => ({
+      ...{ aesthetic: "", budget: "" },
+      ...readLocal("closie.preferences", {}),
+    })),
+    [showPrefs, setShowPrefs] = useState(false);
+  const [message, setMessage] = useState(""),
+    [history, setHistory] = useState([]),
+    [context, setContext] = useState(null),
+    [mode, setMode] = useState("rules");
+  const [filters, setFilters] = useState(initialFilters),
+    [anchor, setAnchor] = useState(null),
+    [outfit, setOutfit] = useState(null),
+    [styleMessage, setStyleMessage] = useState(""),
+    [styleBudget, setStyleBudget] = useState("150");
+  const requestRef = useRef(null),
+    serial = useRef(0);
+  useEffect(() => {
+    writeLocal("closie.saved", saved);
+  }, [saved]);
+  useEffect(() => {
+    writeLocal("closie.preferences", prefs);
+  }, [prefs]);
+  const startRequest = () => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const id = ++serial.current;
+    setLoading(true);
+    setError("");
+    return { controller, id };
+  };
+  async function discover(nextPage = 0) {
+    const { controller, id } = startRequest();
+    const params = new URLSearchParams({
+      category,
+      currency: filters.currency,
+      page: nextPage,
+    });
+    if (prefs.budget) params.set("maxPrice", prefs.budget);
+    if (prefs.aesthetic) params.set("aesthetic", prefs.aesthetic);
+    try {
+      const data = await api(
+        `/discover?${params}`,
+        undefined,
+        controller.signal,
+      );
+      if (serial.current !== id) return;
+      setProducts(
+        nextPage
+          ? (old) => [...old, ...data.results.products]
+          : data.results.products,
+      );
+      setTotal(data.results.total);
+      setPage(nextPage);
+      setHasMore(data.results.hasMore);
+    } catch (e) {
+      if (e.name !== "AbortError" && serial.current === id) setError(e.message);
+    } finally {
+      if (serial.current === id) setLoading(false);
+    }
+  }
+  useEffect(() => {
+    if (tab === "Discover") discover();
+    else {
+      requestRef.current?.abort();
+      serial.current++;
+      setLoading(false);
+      setError("");
+    }
+    return () => requestRef.current?.abort();
+  }, [tab, category, prefs, filters.currency]);
+  const toggleSave = (id) =>
+    setSaved((old) =>
+      old.includes(id) ? old.filter((x) => x !== id) : [...old, id],
+    );
+  const styleThis = (p) => {
+    setAnchor(p);
+    setOutfit(null);
+    setStyleMessage("");
+    setStyleBudget(prefs.budget || "150");
+    setTab("Style");
+  };
+  const filterBody = () =>
+    Object.fromEntries(
+      Object.entries(filters)
+        .filter(([, v]) => v !== "")
+        .map(([k, v]) => [k, k.endsWith("Price") ? Number(v) : v]),
+    );
+  async function find(event, nextPage = 0, override) {
+    event?.preventDefault();
+    const query = override ?? message;
+    if (!query.trim() && !context) return;
+    const { controller, id } = startRequest();
+    try {
+      const data = await api(
+        "/search",
+        {
+          message: nextPage ? "" : query,
+          context,
+          filters: filterBody(),
+          page: nextPage,
+        },
+        controller.signal,
+      );
+      if (serial.current !== id) return;
+      setContext(data.context);
+      setMode(data.interpretationMode);
+      setProducts(
+        nextPage
+          ? (old) => [...old, ...data.results.products]
+          : data.results.products,
+      );
+      setTotal(data.results.total);
+      setPage(nextPage);
+      setHasMore(data.results.hasMore);
+      if (!nextPage) {
+        setHistory((old) => [...old, query]);
+        setMessage("");
+      }
+    } catch (e) {
+      if (e.name !== "AbortError" && serial.current === id) setError(e.message);
+    } finally {
+      if (serial.current === id) setLoading(false);
+    }
+  }
+  async function style(event) {
+    event.preventDefault();
+    const { controller, id } = startRequest();
+    setOutfit(null);
+    try {
+      const data = await api(
+        "/style",
+        {
+          message: styleMessage,
+          context: null,
+          filters: {
+            currency: anchor?.currency || filters.currency,
+            maxPrice: styleBudget === "" ? null : Number(styleBudget),
+            aesthetic: prefs.aesthetic || null,
+          },
+          anchorId: anchor?.id ?? null,
+        },
+        controller.signal,
+      );
+      if (serial.current !== id) return;
+      setOutfit(data);
+      setMode(data.interpretationMode);
+    } catch (e) {
+      if (e.name !== "AbortError" && serial.current === id) setError(e.message);
+    } finally {
+      if (serial.current === id) setLoading(false);
+    }
+  }
+  const displayed = onlySaved
+    ? products.filter((p) => saved.includes(p.id))
+    : products;
+  const card = (p, i) => (
+    <ProductCard
+      key={p.id}
+      product={p}
+      index={i}
+      saved={saved.includes(p.id)}
+      onSave={toggleSave}
+      onStyle={styleThis}
+    />
+  );
+  const changeTab = (t) => {
+    if (t === "Find" && tab !== "Find") {
+      setProducts([]);
+      setTotal(0);
+      setContext(null);
+      setHistory([]);
+      setHasMore(false);
+    }
+    setTab(t);
+    setOnlySaved(false);
+  };
+  return (
+    <>
+      <header className="site-header">
+        <a
+          className="wordmark"
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            changeTab("Discover");
+          }}
+        >
+          closie<span>✳</span>
+        </a>
+        <nav aria-label="Main navigation">
+          {["Discover", "Find", "Style"].map((t) => (
+            <button
+              key={t}
+              aria-current={tab === t ? "page" : undefined}
+              onClick={() => changeTab(t)}
+            >
+              {t}
+            </button>
+          ))}
+        </nav>
+        <button className="personal" onClick={() => setShowPrefs(!showPrefs)}>
+          My style <span className="avatar">C</span>
+        </button>
+      </header>
+      <main>
+        {showPrefs && (
+          <section className="preferences" aria-label="My style preferences">
+            <div>
+              <span className="eyebrow">MAKE IT YOURS</span>
+              <h2>A little more you.</h2>
+              <p>Optional preferences, saved on this browser.</p>
+            </div>
+            <label>
+              Your aesthetic
+              <select
+                value={prefs.aesthetic}
+                onChange={(e) =>
+                  setPrefs({ ...prefs, aesthetic: e.target.value })
+                }
+              >
+                <option value="">Open to anything</option>
+                {[
+                  "minimalist",
+                  "feminine",
+                  "casual",
+                  "classic",
+                  "streetwear",
+                ].map((x) => (
+                  <option key={x}>{x}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Discovery price ceiling
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={prefs.budget}
+                onChange={(e) => setPrefs({ ...prefs, budget: e.target.value })}
+                placeholder="No limit"
+              />
+            </label>
+            <button className="text-button" onClick={() => setShowPrefs(false)}>
+              Done ↗
+            </button>
+          </section>
+        )}
+        {tab === "Discover" && (
+          <>
+            <section className="hero">
+              <div>
+                <span className="eyebrow">YOUR PERSONAL AI STYLIST</span>
+                <h1>
+                  Good finds.
+                  <br />
+                  <em>Very you.</em>
+                </h1>
+                <p>
+                  A new favorite. A fresh combination.
+                  <br />
+                  Discover the pieces that feel like you.
+                </p>
+                <button className="primary" onClick={() => changeTab("Find")}>
+                  Find your next favorite <Icon name="arrow" />
+                </button>
+              </div>
+              <div className="hero-note">
+                <span className="orbit">c.</span>
+                <p>
+                  A wardrobe with
+                  <br />
+                  <em>your point of view.</em>
+                </p>
+                <span className="note-small">
+                  REAL FINDS · YOUR BUDGET · YOUR STYLE
+                </span>
+              </div>
+              <div className="hero-caption">
+                A little inspiration, endless possibilities.
+              </div>
+            </section>
+            <section className="feed-header">
+              <div>
+                <span className="eyebrow">THE DISCOVERY EDIT</span>
+                <h2>
+                  Meet your next favorites<span className="dot">.</span>
+                </h2>
+              </div>
+              <button
+                className={`saved-filter ${onlySaved ? "active" : ""}`}
+                onClick={() => setOnlySaved(!onlySaved)}
+                aria-pressed={onlySaved}
+              >
+                <Icon name="heart" /> Saved in this view (
+                {products.filter((p) => saved.includes(p.id)).length})
+              </button>
+            </section>
+            <div className="category-row" aria-label="Browse categories">
+              {categories.map(([name, value]) => (
+                <button
+                  key={name}
+                  className={category === value ? "selected" : ""}
+                  onClick={() => {
+                    setCategory(value);
+                    setOnlySaved(false);
+                  }}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+            <p className="catalog-note">
+              {prefs.aesthetic ? `Your ${prefs.aesthetic} edit · ` : ""}Catalog
+              finds with retailer links. Prices and stock can change.
+            </p>
+          </>
+        )}
+        {tab === "Find" && (
+          <>
+            <section className="page-intro">
+              <span className="eyebrow">LESS SCROLLING, MORE FINDING</span>
+              <h1>
+                Tell us what <em>you’re after.</em>
+              </h1>
+              <p>
+                A piece, a feeling, an occasion. Start with what’s on your mind.
+              </p>
+            </section>
+            <section className="search-panel">
+              <form onSubmit={find}>
+                <label className="sr-only" htmlFor="query">
+                  Describe what you want
+                </label>
+                <div className="query-box">
+                  <Icon name="search" />
+                  <input
+                    id="query"
+                    maxLength="1000"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder={
+                      context
+                        ? "Refine your finds… e.g. Something more feminine"
+                        : "A minimalist outfit for college under $150"
+                    }
+                    required={!context}
+                  />
+                  <button className="primary" disabled={loading}>
+                    Find it <Icon name="arrow" />
+                  </button>
+                </div>
+                <div className="filters">
+                  {[
+                    ["brand", "Brand"],
+                    ["color", "Color"],
+                  ].map(([k, label]) => (
+                    <label key={k}>
+                      {label}
+                      <input
+                        value={filters[k]}
+                        onChange={(e) =>
+                          setFilters({ ...filters, [k]: e.target.value })
+                        }
+                        placeholder={`Any ${label.toLowerCase()}`}
+                        maxLength="100"
+                      />
+                    </label>
+                  ))}
+                  <label>
+                    Category
+                    <select
+                      value={filters.category}
+                      onChange={(e) =>
+                        setFilters({ ...filters, category: e.target.value })
+                      }
+                    >
+                      {categories.map(([label, value]) => (
+                        <option key={label} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {[
+                    ["minPrice", "Min price"],
+                    ["maxPrice", "Max price"],
+                  ].map(([k, label]) => (
+                    <label key={k}>
+                      {label}
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={filters[k]}
+                        onChange={(e) =>
+                          setFilters({ ...filters, [k]: e.target.value })
+                        }
+                        placeholder="Any"
+                      />
+                    </label>
+                  ))}
+                  <label>
+                    Currency
+                    <select
+                      value={filters.currency}
+                      onChange={(e) =>
+                        setFilters({ ...filters, currency: e.target.value })
+                      }
+                    >
+                      {["USD", "EUR", "GBP"].map((c) => (
+                        <option key={c}>{c}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </form>
+              {history.length > 0 && (
+                <div className="conversation">
+                  <span className="eyebrow">YOUR SEARCH, REFINED</span>
+                  {history.map((h, i) => (
+                    <span className="conversation-chip" key={i}>
+                      {h}
+                    </span>
+                  ))}
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      requestRef.current?.abort();
+                      serial.current++;
+                      setLoading(false);
+                      setContext(null);
+                      setHistory([]);
+                      setProducts([]);
+                      setTotal(0);
+                      setHasMore(false);
+                      setFilters(initialFilters);
+                    }}
+                  >
+                    Start fresh
+                  </button>
+                </div>
+              )}
+              {context && (
+                <p className="context-line">
+                  {[
+                    context.category,
+                    context.brand,
+                    context.color,
+                    context.aesthetic,
+                    context.occasion,
+                    context.maxPrice != null
+                      ? `Up to ${money(context.maxPrice, context.currency)}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "All catalog finds"}{" "}
+                  ·{" "}
+                  {mode === "rules"
+                    ? "Rules-based interpretation"
+                    : "AI-assisted interpretation"}
+                </p>
+              )}
+            </section>
+            {context && (
+              <div className="results-title">
+                <h2>Your finds</h2>
+                <span>{total} matching pieces</span>
+              </div>
+            )}
+          </>
+        )}
+        {tab === "Style" && (
+          <>
+            <section className="page-intro">
+              <span className="eyebrow">THE ART OF GETTING DRESSED</span>
+              <h1>
+                Make it <em>an outfit.</em>
+              </h1>
+              <p>
+                A little guidance. A complete look. Always within your budget.
+              </p>
+            </section>
+            <section className="stylist-layout">
+              <form className="stylist-form" onSubmit={style}>
+                <span className="eyebrow">YOUR STYLING BRIEF</span>
+                <h2>Where are we going?</h2>
+                <label>
+                  Occasion, aesthetic & preferences
+                  <textarea
+                    maxLength="1000"
+                    rows="4"
+                    value={styleMessage}
+                    onChange={(e) => setStyleMessage(e.target.value)}
+                    placeholder="A feminine look for college, relaxed but put together"
+                  />
+                </label>
+                <div className="budget-row">
+                  <label>
+                    Total item budget ({anchor?.currency || filters.currency})
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      required
+                      value={styleBudget}
+                      onChange={(e) => setStyleBudget(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Currency
+                    <select
+                      disabled={!!anchor}
+                      value={anchor?.currency || filters.currency}
+                      onChange={(e) =>
+                        setFilters({ ...filters, currency: e.target.value })
+                      }
+                    >
+                      {["USD", "EUR", "GBP"].map((c) => (
+                        <option key={c}>{c}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {anchor && (
+                  <div className="anchor">
+                    <p>
+                      Starting with <strong>{anchor.title}</strong> ·{" "}
+                      {money(anchor.price, anchor.currency)}
+                    </p>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => setAnchor(null)}
+                    >
+                      Remove anchor
+                    </button>
+                  </div>
+                )}
+                <button className="primary" disabled={loading}>
+                  Build my outfit <Icon name="spark" />
+                </button>
+                <p className="fine-print">
+                  Real catalog pieces. Item prices only, excluding shipping and
+                  tax. Check size and stock with the retailer.
+                </p>
+              </form>
+              <div className="stylist-output">
+                {outfit ? (
+                  <>
+                    <div className="outfit-title">
+                      <span className="eyebrow">
+                        {outfit.complete
+                          ? "YOUR LOOK, TOGETHER"
+                          : "A START, NOT A COMPLETE LOOK"}
+                      </span>
+                      <h2>
+                        {outfit.complete
+                          ? "Consider it styled."
+                          : "A few pieces are missing."}
+                      </h2>
+                      <strong className="outfit-total">
+                        {money(outfit.total, outfit.currency)}
+                      </strong>
+                      <p>{outfit.explanation}</p>
+                      <span className="mode-label">
+                        {mode === "rules"
+                          ? "Rules-based styling"
+                          : "AI-assisted preferences · catalog-based styling"}
+                      </span>
+                    </div>
+                    <div className="outfit-grid">
+                      {outfit.products.map(card)}
+                    </div>
+                  </>
+                ) : (
+                  <div className="stylist-empty">
+                    <Icon name="spark" width="48" height="48" />
+                    <h2>
+                      Your next look
+                      <br />
+                      <em>starts here.</em>
+                    </h2>
+                    <p>Tell us your plans. We’ll bring the pieces together.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+          </>
+        )}
+        {error && (
+          <div className="error" role="alert">
+            {error}{" "}
+            <button
+              className="text-button"
+              onClick={() => (tab === "Discover" ? discover() : setError(""))}
+            >
+              {tab === "Discover" ? "Try again" : "Dismiss"}
+            </button>
+          </div>
+        )}
+        {tab !== "Style" && (
+          <>
+            {loading && (
+              <p role="status" className="status">
+                Finding your next favorites…
+              </p>
+            )}
+            {!loading &&
+              !error &&
+              displayed.length === 0 &&
+              (tab === "Discover" || context) && (
+                <section className="empty">
+                  <Icon name="search" width="32" height="32" />
+                  <h2>
+                    {onlySaved
+                      ? "Your favorites start with a heart."
+                      : "Nothing here just yet."}
+                  </h2>
+                  <p>
+                    {onlySaved
+                      ? "Save a piece in this view to find it here."
+                      : "Try a broader category or a different budget. Only reviewed, current catalog items appear here."}
+                  </p>
+                </section>
+              )}
+            <div className="product-grid">{displayed.map(card)}</div>
+            {hasMore && !onlySaved && (
+              <div className="load-more">
+                <button
+                  disabled={loading}
+                  onClick={() =>
+                    tab === "Discover"
+                      ? discover(page + 1)
+                      : find(null, page + 1)
+                  }
+                >
+                  Discover more ↓
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </main>
+      <footer>
+        <span className="wordmark">
+          closie<span>✳</span>
+        </span>
+        <p>Your style. Your pace. Your point of view.</p>
+        <span>YOUR PERSONAL AI STYLIST</span>
+      </footer>
+    </>
+  );
+}
+createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
