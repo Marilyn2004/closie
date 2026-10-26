@@ -2,7 +2,7 @@ spring:
   application:
     name: fashion-search-engine
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/fashion_search}
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:55432/fashion_search}
     username: ${DB_USERNAME:fashion}
     password: ${DB_PASSWORD:fashion}
   jpa:
@@ -20,6 +20,9 @@ ebay:
   api-base-url: ${EBAY_API_BASE_URL:https://api.ebay.com}
   client-id: ${EBAY_CLIENT_ID:}
   client-secret: ${EBAY_CLIENT_SECRET:}
+  enrich-details: ${EBAY_ENRICH_DETAILS:false}
+  details-per-page: ${EBAY_DETAILS_PER_PAGE:5}
+  request-interval-millis: ${EBAY_REQUEST_INTERVAL_MS:200}
   marketplace-id: ${EBAY_MARKETPLACE_ID:EBAY_US}
   search-keywords:
     - leather jacket
@@ -30,6 +33,8 @@ ebay:
     - blouse
     - necklace
     - earrings
+    - shoulder bag
+    - tote bag
   page-size: ${EBAY_PAGE_SIZE:50}
   max-pages: ${EBAY_MAX_PAGES:2}
 
@@ -37,6 +42,11 @@ import:
   token: ${IMPORT_TOKEN:}
 
 closie:
+  demo:
+    enabled: ${CLOSIE_DEMO_ENABLED:false}
+  refresh:
+    enabled: ${CLOSIE_REFRESH_ENABLED:false}
+    interval-ms: ${CLOSIE_REFRESH_INTERVAL_MS:14400000}
   ai:
     enabled: ${CLOSIE_AI_ENABLED:false}
     key: ${OPENAI_API_KEY:}

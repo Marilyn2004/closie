@@ -35,6 +35,35 @@ public class QueryInterpreter {
         model = Optional.empty();
       }
     }
+    // Reset individual constraints explicitly, not by confusing null with a missing field.
+    if (message.toLowerCase(Locale.ROOT).contains("any color"))
+      context =
+          new SearchContext(
+              context.keywords(),
+              context.category(),
+              context.brand(),
+              "",
+              context.minPrice(),
+              context.maxPrice(),
+              context.currency(),
+              context.aesthetic(),
+              context.occasion(),
+              context.vibe(),
+              context.mood());
+    if (message.toLowerCase(Locale.ROOT).contains("any brand"))
+      context =
+          new SearchContext(
+              context.keywords(),
+              context.category(),
+              "",
+              context.color(),
+              context.minPrice(),
+              context.maxPrice(),
+              context.currency(),
+              context.aesthetic(),
+              context.occasion(),
+              context.vibe(),
+              context.mood());
     context = merge(context, request.filters());
     validate(context);
     return new Interpretation(context, model.isPresent() ? "ai-assisted" : "rules");
@@ -97,10 +126,26 @@ public class QueryInterpreter {
                 "streetwear",
                 "edgy"));
     String occasion =
-        pick(text, List.of("college", "work", "dinner", "wedding", "weekend", "party"));
+        pick(
+            text,
+            List.of(
+                "coffee date",
+                "dinner date",
+                "college",
+                "work",
+                "dinner",
+                "wedding",
+                "weekend",
+                "party"));
+    String mood =
+        pick(
+            text, List.of("effortless", "playful", "relaxed", "polished", "sleek", "soft", "bold"));
+    String vibe = old.vibe();
+    var vm = Pattern.compile("\\b(aritzia|zara|mango)\\s+(?:vibe|inspired|style)\\b").matcher(text);
+    if (vm.find()) vibe = vm.group(1);
     Matcher max =
         Pattern.compile(
-                "(?:under|below|up to|budget(?: of)?|less"
+                "(?:under|below|up to|budget(?: is| of)?|less"
                     + " than|max(?:imum)?)\\s*(?:usd|eur|gbp)?\\s*[$€£]?\\s*(\\d+(?:\\.\\d{1,2})?)")
             .matcher(text);
     Matcher min =
@@ -120,7 +165,11 @@ public class QueryInterpreter {
     else if (aesthetic == null
         && occasion == null
         && color == null
-        && brand == old.brand()
+        && mood == null
+        && Objects.equals(vibe, old.vibe())
+        && !text.contains("any color")
+        && !text.contains("any brand")
+        && Objects.equals(brand, old.brand())
         && !max.reset().find()
         && !text.contains("cheaper")
         && !min.reset().find())
@@ -138,13 +187,15 @@ public class QueryInterpreter {
         maximum,
         currency == null ? old.currency() : currency,
         aesthetic == null ? old.aesthetic() : aesthetic,
-        occasion == null ? old.occasion() : occasion);
+        occasion == null ? old.occasion() : occasion,
+        vibe,
+        mood == null ? old.mood() : mood);
   }
 
   private String keywordPhrase(String text, String brand) {
     String phrase =
         text.replaceAll(
-            "(?:under|below|up to|budget(?: of)?|less than|max(?:imum)?|over|above|at"
+            "(?:under|below|up to|budget(?: is| of)?|less than|max(?:imum)?|over|above|at"
                 + " least|min(?:imum)?)\\s*(?:usd|eur|gbp)?\\s*[$€£]?\\s*\\d+(?:\\.\\d{1,2})?",
             " ");
     if (brand != null)
@@ -189,13 +240,22 @@ public class QueryInterpreter {
         value(change.maxPrice(), old.maxPrice()),
         value(change.currency(), old.currency()),
         value(change.aesthetic(), old.aesthetic()),
-        value(change.occasion(), old.occasion()));
+        value(change.occasion(), old.occasion()),
+        value(change.vibe(), old.vibe()),
+        value(change.mood(), old.mood()));
   }
 
   public void validate(SearchContext c) {
     for (String s :
         Arrays.asList(
-            c.keywords(), c.category(), c.brand(), c.color(), c.aesthetic(), c.occasion()))
+            c.keywords(),
+            c.category(),
+            c.brand(),
+            c.color(),
+            c.aesthetic(),
+            c.occasion(),
+            c.vibe(),
+            c.mood()))
       if (s != null && s.length() > 300)
         throw new IllegalArgumentException("A search preference is too long.");
     if (c.currency() == null || !Set.of("USD", "EUR", "GBP").contains(c.currency()))

@@ -132,4 +132,22 @@ class QueryInterpreterTest {
   void arbitraryKeywordDoesNotBecomeInventedProduct() {
     assertThat(parse("cashmere", null).keywords()).isEqualTo("cashmere");
   }
+
+  @Test
+  void recognizesBudgetIsAndKeepsBrandVibeSoft() {
+    var c = parse("effortless playful coffee date with an Aritzia vibe. My budget is $150", null);
+    assertThat(c.maxPrice()).isEqualByComparingTo("150");
+    assertThat(c.brand()).isNull();
+    assertThat(c.vibe()).isEqualTo("aritzia");
+    assertThat(c.occasion()).isEqualTo("coffee date");
+  }
+
+  @Test
+  void explicitAnyColorClearsColorWithoutDestroyingKeywords() {
+    var c = parse("black leather jacket under $100", null);
+    c = parse("any color", c);
+    assertThat(c.color()).isEmpty();
+    assertThat(c.keywords()).contains("leather");
+    assertThat(c.maxPrice()).isEqualByComparingTo("100");
+  }
 }

@@ -10,6 +10,7 @@ public class CatalogNormalizer {
     String t =
         ((title == null ? "" : title) + " " + (category == null ? "" : category))
             .toLowerCase(Locale.ROOT);
+    if (t.matches(".*\\b(bags?|totes?|handbags?|crossbody)\\b.*")) return "BAG";
     if (t.matches(".*\\b(dress|dresses|jumpsuit|romper)\\b.*")) return "ONE_PIECE";
     if (t.matches(".*\\b(sneakers?|shoes?|boots?|sandals?|loafers?|heels?|flats)\\b.*"))
       return "SHOES";
@@ -28,7 +29,7 @@ public class CatalogNormalizer {
     target.setRetailer(clean(item.retailer(), 255));
     String supplied = clean(item.outfitSlot(), 30);
     target.setOutfitSlot(
-        Set.of("TOP", "BOTTOM", "ONE_PIECE", "SHOES", "OUTERWEAR", "ACCESSORY")
+        Set.of("TOP", "BOTTOM", "ONE_PIECE", "SHOES", "OUTERWEAR", "ACCESSORY", "BAG")
                 .contains(supplied == null ? "" : supplied)
             ? supplied
             : slot(item.title(), item.category()));

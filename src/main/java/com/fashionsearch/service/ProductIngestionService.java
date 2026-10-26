@@ -1,8 +1,8 @@
 package com.fashionsearch.service;
 
+import com.fashionsearch.catalog.SourceProduct;
 import com.fashionsearch.client.EbayClient;
 import com.fashionsearch.config.EbayProperties;
-import com.fashionsearch.dto.EbayProduct;
 import com.fashionsearch.dto.ImportResult;
 import com.fashionsearch.model.Product;
 import com.fashionsearch.repository.ProductRepository;
@@ -61,7 +61,52 @@ public class ProductIngestionService {
     this.transactions = transactions;
   }
 
+  private final java.util.concurrent.locks.ReentrantLock importLock =
+      new java.util.concurrent.locks.ReentrantLock();
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private org.springframework.jdbc.core.JdbcTemplate importHistory;
+
   public ImportResult importFashionProducts() {
+    if (!importLock.tryLock()) throw new ImportBusyException();
+    Long runId = null;
+    try {
+      if (importHistory != null)
+        runId =
+            importHistory.queryForObject(
+                "INSERT INTO catalog_import_runs(status) VALUES ('RUNNING') RETURNING id",
+                Long.class);
+      var result = performImport();
+      if (runId != null)
+        importHistory.update(
+            "UPDATE catalog_import_runs SET"
+                + " finished_at=CURRENT_TIMESTAMP,status='SUCCEEDED',created_count=?,updated_count=?,skipped_count=?"
+                + " WHERE id=?",
+            result.created(),
+            result.updated(),
+            result.skipped(),
+            runId);
+      org.slf4j.LoggerFactory.getLogger(getClass())
+          .info(
+              "catalog_import status=SUCCEEDED created={} updated={} skipped={}",
+              result.created(),
+              result.updated(),
+              result.skipped());
+      return result;
+    } catch (RuntimeException failure) {
+      if (runId != null)
+        importHistory.update(
+            "UPDATE catalog_import_runs SET"
+                + " finished_at=CURRENT_TIMESTAMP,status='FAILED',error_code=? WHERE id=?",
+            failure.getClass().getSimpleName(),
+            runId);
+      throw failure;
+    } finally {
+      importLock.unlock();
+    }
+  }
+
+  private ImportResult performImport() {
     int pageSize = ebayProperties.getPageSize();
     int maxPages = ebayProperties.getMaxPages();
     if (pageSize < 1 || pageSize > MAX_EBAY_PAGE_SIZE || maxPages < 1) {
@@ -102,19 +147,7 @@ public class ProductIngestionService {
     int updated = 0;
     int skipped = 0;
     for (var item : ebayProducts) {
-      Optional<Product> mapped =
-          item == null
-              ? Optional.empty()
-              : map(
-                  new EbayProduct(
-                      item.externalId(),
-                      item.title(),
-                      item.description(),
-                      item.category(),
-                      item.price(),
-                      item.currency(),
-                      item.imageUrl(),
-                      item.productUrl()));
+      Optional<Product> mapped = map(item);
       if (mapped.isEmpty()) {
         skipped++;
         continue;
@@ -148,11 +181,11 @@ public class ProductIngestionService {
     return new ImportResult(created, updated, skipped);
   }
 
-  private Optional<Product> map(EbayProduct ebayProduct) {
+  private Optional<Product> map(SourceProduct ebayProduct) {
     if (ebayProduct == null) {
       return Optional.empty();
     }
-    String externalId = trimToNull(ebayProduct.itemId());
+    String externalId = trimToNull(ebayProduct.externalId());
     String title = trimToNull(ebayProduct.title());
     if (externalId == null || externalId.length() > EXTERNAL_ID_MAX_LENGTH) {
       return Optional.empty();
@@ -170,12 +203,12 @@ public class ProductIngestionService {
     product.setSource(EBAY_SOURCE);
     product.setExternalId(externalId);
     product.setTitle(title);
-    product.setDescription(trimToNull(ebayProduct.shortDescription()));
-    product.setCategory(normalizeCategory(ebayProduct.categoryName()));
+    product.setDescription(trimToNull(ebayProduct.description()));
+    product.setCategory(normalizeCategory(ebayProduct.category()));
     product.setPrice(price);
     product.setCurrency(currency);
     product.setImageUrl(trimToNull(ebayProduct.imageUrl()));
-    product.setProductUrl(trimToNull(ebayProduct.itemWebUrl()));
+    product.setProductUrl(trimToNull(ebayProduct.productUrl()));
     return Optional.of(product);
   }
 
@@ -206,7 +239,7 @@ public class ProductIngestionService {
       return null;
     }
     BigDecimal scaled = price.setScale(2, RoundingMode.HALF_UP);
-    if (scaled.signum() < 0) {
+    if (price.signum() < 0 || scaled.signum() < 0) {
       return null;
     }
     int integerDigits = Math.max(0, scaled.precision() - scaled.scale());
@@ -221,7 +254,7 @@ public class ProductIngestionService {
     if (trimmed == null || trimmed.length() != 3) {
       return null;
     }
-    return trimmed.toUpperCase();
+    return trimmed.matches("[A-Za-z]{3}") ? trimmed.toUpperCase(java.util.Locale.ROOT) : null;
   }
 
   private String normalizeCategory(String category) {

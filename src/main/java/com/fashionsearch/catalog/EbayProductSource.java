@@ -15,10 +15,22 @@ public class EbayProductSource implements ProductSource {
     return "ebay";
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.fashionsearch.config.EbayProperties properties;
+
   public Page fetch(String keyword, int offset) {
     var page = client.search(keyword, offset);
+    java.util.concurrent.atomic.AtomicInteger detailCount =
+        new java.util.concurrent.atomic.AtomicInteger();
     return new Page(
         page.products().stream()
+            .map(
+                p ->
+                    properties != null
+                            && properties.isEnrichDetails()
+                            && detailCount.getAndIncrement() < properties.getDetailsPerPage()
+                        ? client.enrich(p)
+                        : p)
             .map(
                 p ->
                     new SourceProduct(
@@ -30,12 +42,12 @@ public class EbayProductSource implements ProductSource {
                         p.currency(),
                         p.imageUrl(),
                         p.itemWebUrl(),
-                        null,
+                        p.brand(),
                         "eBay",
                         null,
-                        null,
-                        null,
-                        "UNKNOWN",
+                        p.color(),
+                        p.sizes(),
+                        p.availability(),
                         null,
                         null))
             .toList(),

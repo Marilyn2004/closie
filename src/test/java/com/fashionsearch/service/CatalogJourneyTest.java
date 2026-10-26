@@ -279,7 +279,9 @@ class CatalogJourneyTest {
         new ProcessBuilder(
                 System.getenv().getOrDefault("CLOSIE_NODE", "node"),
                 "node_modules/@playwright/test/cli.js",
-                "test")
+                "test",
+                "--grep-invert",
+                "@demo")
             .directory(new java.io.File("frontend"))
             .redirectErrorStream(true)
             .redirectOutput(new java.io.File("target/browser-smoke.log"));

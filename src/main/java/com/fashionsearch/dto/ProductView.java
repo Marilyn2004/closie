@@ -23,7 +23,8 @@ public record ProductView(
     String availability,
     Instant lastSeenAt,
     String styleTags,
-    String occasionTags) {
+    String occasionTags,
+    boolean demo) {
   public static ProductView of(Product p) {
     return new ProductView(
         p.getId(),
@@ -45,6 +46,7 @@ public record ProductView(
         p.getAvailability(),
         p.getLastSeenAt(),
         p.getStyleTags(),
-        p.getOccasionTags());
+        p.getOccasionTags(),
+        "closie-demo".equals(p.getSource()));
   }
 }

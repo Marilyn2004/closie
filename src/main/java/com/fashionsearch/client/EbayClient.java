@@ -43,31 +43,152 @@ public class EbayClient {
     tokenExpiresAt = Instant.EPOCH;
   }
 
-  public EbaySearchPage search(String keyword, int offset) {
-    String token = currentAccessToken();
-    SearchResponse response;
-    try {
-      response =
-          restClient
-              .get()
-              .uri(searchUri(keyword, offset))
-              .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-              .header("X-EBAY-C-MARKETPLACE-ID", properties.getMarketplaceId())
-              .retrieve()
-              .body(SearchResponse.class);
-    } catch (RestClientResponseException exception) {
-      throw new EbayClientException(
-          "eBay search failed with HTTP " + exception.getStatusCode().value());
-    } catch (RestClientException exception) {
-      throw new EbayClientException("eBay search failed");
+  private Instant retryNotBefore = Instant.EPOCH;
+
+  public synchronized EbaySearchPage search(String keyword, int offset) {
+    if (Instant.now().isBefore(retryNotBefore))
+      throw new EbayClientException("eBay is in a rate-limit cooldown; refresh later.");
+    boolean renewed = false;
+    for (int attempt = 0; attempt < 3; attempt++) {
+      String token = currentAccessToken();
+      try {
+        throttle();
+        var response =
+            restClient
+                .get()
+                .uri(searchUri(keyword, offset))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header("X-EBAY-C-MARKETPLACE-ID", properties.getMarketplaceId())
+                .retrieve()
+                .body(SearchResponse.class);
+        if (response == null) throw new EbayClientException("eBay search response was empty");
+        return new EbaySearchPage(toProducts(response.itemSummaries()), hasText(response.next()));
+      } catch (RestClientResponseException failure) {
+        int status = failure.getStatusCode().value();
+        if (status == 401 && !renewed) {
+          clearCachedToken();
+          renewed = true;
+          continue;
+        }
+        if (status == 429) {
+          long seconds = retryAfter(failure);
+          if (attempt < 2 && seconds <= 2) {
+            pause(Math.max(1, seconds) * 1000);
+            continue;
+          }
+          retryNotBefore = Instant.now().plusSeconds(Math.max(1, seconds));
+          throw new EbayClientException(
+              "eBay rate limit reached. Refresh later; Retry-After is respected.");
+        }
+        if (status >= 500 && attempt < 2) {
+          pause(250L * (attempt + 1));
+          continue;
+        }
+        throw new EbayClientException("eBay search failed with HTTP " + status);
+      } catch (RestClientException failure) {
+        throw new EbayClientException("eBay search failed");
+      }
     }
-    if (response == null) {
-      throw new EbayClientException("eBay search response was empty");
-    }
-    return new EbaySearchPage(toProducts(response.itemSummaries()), hasText(response.next()));
+    throw new EbayClientException("eBay search retry limit reached");
   }
 
-  private String currentAccessToken() {
+  private long lastRequestNanos;
+
+  private void throttle() {
+    long elapsed = (System.nanoTime() - lastRequestNanos) / 1000000;
+    long wait = properties.getRequestIntervalMillis() - elapsed;
+    if (wait > 0) pause(wait);
+    lastRequestNanos = System.nanoTime();
+  }
+
+  private void pause(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+      throw new EbayClientException("eBay request interrupted");
+    }
+  }
+
+  private long retryAfter(RestClientResponseException failure) {
+    String value =
+        failure.getResponseHeaders() == null
+            ? null
+            : failure.getResponseHeaders().getFirst("Retry-After");
+    if (value == null) return 1;
+    try {
+      return Math.max(0, Long.parseLong(value));
+    } catch (NumberFormatException invalid) {
+      try {
+        return Math.max(
+            0,
+            java.time.Duration.between(
+                    Instant.now(),
+                    java.time.ZonedDateTime.parse(
+                            value, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
+                        .toInstant())
+                .getSeconds());
+      } catch (Exception unparseable) {
+        return 60;
+      }
+    }
+  }
+
+  /** Optional, bounded provider-supplied aspect enrichment. Never guess brand/color/size. */
+  public synchronized EbayProduct enrich(EbayProduct product) {
+    try {
+      throttle();
+      String id = URLEncoder.encode(product.itemId(), StandardCharsets.UTF_8);
+      var item =
+          restClient
+              .get()
+              .uri(
+                  URI.create(
+                      normalizeBaseUrl(properties.getApiBaseUrl()) + "/buy/browse/v1/item/" + id))
+              .header(HttpHeaders.AUTHORIZATION, "Bearer " + currentAccessToken())
+              .header("X-EBAY-C-MARKETPLACE-ID", properties.getMarketplaceId())
+              .retrieve()
+              .body(ItemDetails.class);
+      if (item == null) return product;
+      String brand = aspect(item.localizedAspects(), "Brand"),
+          color = aspect(item.localizedAspects(), "Color"),
+          size = aspect(item.localizedAspects(), "Size");
+      return new EbayProduct(
+          product.itemId(),
+          product.title(),
+          product.shortDescription(),
+          product.categoryName(),
+          item.price() == null ? product.price() : parsePrice(item.price()),
+          item.price() == null ? product.currency() : item.price().currency(),
+          product.imageUrl(),
+          hasText(item.itemWebUrl()) ? item.itemWebUrl() : product.itemWebUrl(),
+          brand,
+          color,
+          size == null ? null : List.of(size),
+          "UNKNOWN");
+    } catch (RestClientResponseException failure) {
+      if (failure.getStatusCode().value() == 429)
+        throw new EbayClientException("eBay detail enrichment rate limited; retry later.");
+      return product;
+    } catch (RestClientException failure) {
+      return product;
+    }
+  }
+
+  private String aspect(List<Aspect> aspects, String name) {
+    if (aspects == null) return null;
+    return aspects.stream()
+        .filter(a -> a != null && name.equalsIgnoreCase(a.name()) && hasText(a.value()))
+        .map(Aspect::value)
+        .findFirst()
+        .orElse(null);
+  }
+
+  private record Aspect(String name, String value) {}
+
+  private record ItemDetails(List<Aspect> localizedAspects, Price price, String itemWebUrl) {}
+
+  private synchronized String currentAccessToken() {
     if (accessToken != null && Instant.now().isBefore(tokenExpiresAt)) {
       return accessToken;
     }

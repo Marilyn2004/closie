@@ -25,9 +25,30 @@ public class CatalogService {
 
   public record Results(List<ProductView> products, long total, int page, boolean hasMore) {}
 
+  @Value("${closie.demo.enabled:false}")
+  private boolean demoEnabled;
+
+  public void setDemoEnabled(boolean enabled) {
+    this.demoEnabled = enabled;
+  }
+
   public Results search(SearchContext c, int page) {
+    return search(c, page, "relevance");
+  }
+
+  public Results search(SearchContext c, int page, String sort) {
+    if (sort == null) sort = "relevance";
+    if (!Set.of("relevance", "price_asc", "price_desc", "recent").contains(sort))
+      throw new IllegalArgumentException("Unknown sort order.");
+    var sorting =
+        switch (sort) {
+          case "price_asc" -> Sort.by("price").ascending().and(Sort.by("id"));
+          case "price_desc" -> Sort.by("price").descending().and(Sort.by("id"));
+          case "recent" -> Sort.by("lastSeenAt").descending().and(Sort.by("id"));
+          default -> Sort.unsorted();
+        };
     if (page < 0 || page > 1000) throw new IllegalArgumentException("Invalid page.");
-    var result = repository.findAll(spec(c, true), PageRequest.of(page, 24));
+    var result = repository.findAll(spec(c, true), PageRequest.of(page, 24, sorting));
     return new Results(
         result.getContent().stream().map(ProductView::of).toList(),
         result.getTotalElements(),
@@ -75,9 +96,14 @@ public class CatalogService {
       // Other providers require explicit reviewed source IDs in config; see provider policy.
       Predicate permittedOther =
           permittedSources.isEmpty() ? b.disjunction() : root.get("source").in(permittedSources);
-      predicates.add(b.or(ebayAllowed, permittedOther));
-      predicates.add(b.like(b.lower(root.get("imageUrl")), "https://%"));
-      predicates.add(b.like(b.lower(root.get("productUrl")), "https://%"));
+      Predicate demo = b.and(b.equal(root.get("source"), "closie-demo"), b.literal(demoEnabled));
+      if (demoEnabled) predicates.add(demo);
+      else predicates.add(b.or(ebayAllowed, permittedOther));
+      predicates.add(
+          b.or(
+              b.and(demo, b.like(root.get("imageUrl"), "/demo/%")),
+              b.like(b.lower(root.get("imageUrl")), "https://%")));
+      predicates.add(b.or(demo, b.like(b.lower(root.get("productUrl")), "https://%")));
       if (c.minPrice() != null)
         predicates.add(b.greaterThanOrEqualTo(root.get("price"), c.minPrice()));
       if (c.maxPrice() != null)
@@ -107,7 +133,7 @@ public class CatalogService {
           && query.getResultType() != Long.class
           && query.getResultType() != long.class) {
         Expression<Integer> relevance = b.literal(0);
-        for (String preference : Arrays.asList(c.aesthetic(), c.occasion()))
+        for (String preference : Arrays.asList(c.aesthetic(), c.occasion(), c.vibe(), c.mood()))
           if (text(preference)) {
             Predicate match =
                 b.or(
@@ -118,13 +144,25 @@ public class CatalogService {
             relevance = b.sum(relevance, b.<Integer>selectCase().when(match, 10).otherwise(0));
           }
         List<Order> ordering = new ArrayList<>();
-        if (text(c.aesthetic()) || text(c.occasion())) ordering.add(b.desc(relevance));
+        if (text(c.aesthetic()) || text(c.occasion()) || text(c.vibe()) || text(c.mood()))
+          ordering.add(b.desc(relevance));
         ordering.add(b.desc(root.get("lastSeenAt")));
         ordering.add(b.asc(root.get("id")));
         query.orderBy(ordering);
       }
       return b.and(predicates.toArray(Predicate[]::new));
     };
+  }
+
+  public List<ProductView> saved(List<Long> ids) {
+    if (ids == null || ids.size() > 200 || ids.stream().anyMatch(id -> id == null || id < 1))
+      throw new IllegalArgumentException("Save up to 200 valid products.");
+    if (ids.isEmpty()) return List.of();
+    var c = new SearchContext("", null, null, null, null, null, null, null, null);
+    var found = repository.findAll(spec(c, false).and((root, q, b) -> root.get("id").in(ids)));
+    var byId = new HashMap<Long, ProductView>();
+    found.forEach(p -> byId.put(p.getId(), ProductView.of(p)));
+    return ids.stream().distinct().map(byId::get).filter(Objects::nonNull).toList();
   }
 
   private List<String> permittedSources = List.of();
@@ -134,7 +172,7 @@ public class CatalogService {
     permittedSources =
         Arrays.stream(sources.split(","))
             .map(String::trim)
-            .filter(s -> !s.isEmpty() && !s.equals("ebay"))
+            .filter(s -> !s.isEmpty() && !s.equals("ebay") && !s.equals("closie-demo"))
             .toList();
   }
 

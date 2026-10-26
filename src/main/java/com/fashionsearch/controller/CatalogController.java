@@ -30,7 +30,8 @@ public class CatalogController {
     return new SearchResponse(
         parsed.context(),
         parsed.mode(),
-        catalog.search(parsed.context(), request.page() == null ? 0 : request.page()));
+        catalog.search(
+            parsed.context(), request.page() == null ? 0 : request.page(), request.sort()));
   }
 
   @GetMapping("/search")
@@ -42,14 +43,16 @@ public class CatalogController {
       @RequestParam(required = false) BigDecimal minPrice,
       @RequestParam(required = false) BigDecimal maxPrice,
       @RequestParam(defaultValue = "USD") String currency,
-      @RequestParam(defaultValue = "0") int page) {
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "relevance") String sort) {
     return search(
         new SearchRequest(
             q,
             null,
             new SearchContext(
                 null, category, brand, color, minPrice, maxPrice, currency, null, null),
-            page));
+            page,
+            sort));
   }
 
   @GetMapping("/discover")
@@ -58,11 +61,26 @@ public class CatalogController {
       @RequestParam(required = false) BigDecimal maxPrice,
       @RequestParam(required = false) String aesthetic,
       @RequestParam(defaultValue = "USD") String currency,
-      @RequestParam(defaultValue = "0") int page) {
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "relevance") String sort) {
     SearchContext c =
         new SearchContext("", category, null, null, null, maxPrice, currency, aesthetic, null);
     interpreter.validate(c);
-    return new SearchResponse(c, "rules", catalog.search(c, page));
+    return new SearchResponse(c, "rules", catalog.search(c, page, sort));
+  }
+
+  public record SavedRequest(java.util.List<Long> ids) {}
+
+  public record SavedResponse(
+      java.util.List<ProductView> products, java.util.List<Long> unavailableIds) {}
+
+  @PostMapping("/products/saved")
+  public SavedResponse saved(@RequestBody SavedRequest request) {
+    var products = catalog.saved(request.ids());
+    var visible =
+        products.stream().map(ProductView::id).collect(java.util.stream.Collectors.toSet());
+    return new SavedResponse(
+        products, request.ids().stream().distinct().filter(id -> !visible.contains(id)).toList());
   }
 
   @GetMapping("/products/{id}")

@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:55432/closie_demo
+closie:
+  demo:
+    enabled: true
+  refresh:
+    enabled: false
