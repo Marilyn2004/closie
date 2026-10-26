@@ -885,3 +885,343 @@ footer > span:last-child {
     transition: none !important;
   }
 }
+/* Complete MVP: explicit data modes, original sample illustrations, and styling conversations. */
+.catalog-banner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 5%;
+  font-size: 10px;
+  background: #f0f1eb;
+  color: #5d6451;
+  line-height: 1.6;
+}
+.catalog-banner > span:first-child {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  white-space: nowrap;
+}
+.catalog-banner > span:last-child {
+  font-size: 9px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.demo-banner {
+  background: #eceee3;
+}
+.hero-search-link {
+  display: block;
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  margin-top: 18px;
+  color: var(--muted);
+}
+.hero-collage {
+  position: relative;
+  min-height: 350px;
+  margin-left: 30px;
+}
+.hero-collage img {
+  position: absolute;
+  width: 48%;
+  border: 6px solid #f8f6f0;
+}
+.hero-collage img:nth-child(1) {
+  top: -5px;
+  left: 8%;
+  transform: rotate(-8deg);
+}
+.hero-collage img:nth-child(2) {
+  top: 20px;
+  right: -5%;
+  transform: rotate(9deg);
+}
+.hero-collage img:nth-child(3) {
+  width: 38%;
+  bottom: -12px;
+  left: 28%;
+  transform: rotate(-2deg);
+}
+.hero-collage > span {
+  position: absolute;
+  bottom: -23px;
+  right: 0;
+  font-size: 8px;
+  letter-spacing: 2px;
+  line-height: 1.8;
+  text-align: right;
+}
+.hero-collage small {
+  font-size: 8px;
+  letter-spacing: 0.3px;
+  color: var(--muted);
+}
+.image-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+}
+.sample-pill {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  font-size: 8px;
+  letter-spacing: 1px;
+  background: #faf9f6d9;
+  padding: 6px 8px;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+.sample-detail-link {
+  font-size: 9px;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--muted);
+}
+.feed-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 25px;
+}
+.feed-tools .catalog-note {
+  margin: 0;
+}
+.feed-tools label {
+  flex-direction: row;
+  align-items: center;
+  font-size: 10px;
+}
+.feed-tools select {
+  width: 150px;
+  height: 34px;
+  padding: 5px 9px;
+  font-size: 10px;
+}
+.prompt-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.prompt-examples button,
+.refine-chips button {
+  font-size: 10px;
+  line-height: 1.6;
+  text-align: left;
+  border: 1px solid #d6dbcd;
+  border-radius: 16px;
+  padding: 7px 10px;
+  background: #f7f8f1;
+}
+.checkbox-label {
+  flex-direction: row;
+  align-items: flex-start;
+  line-height: 1.6;
+}
+.checkbox-label input {
+  width: auto;
+  margin-top: 3px;
+  accent-color: var(--olive);
+}
+.styling-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 25px 0 12px;
+}
+.styling-history .conversation-chip {
+  font-size: 10px;
+}
+.refine-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.saved-notice {
+  font-size: 12px;
+  background: #eeeee5;
+  padding: 14px;
+  margin-bottom: 25px;
+  line-height: 1.8;
+}
+.product-dialog {
+  max-width: 850px;
+  width: 90%;
+  padding: 32px;
+  border: 1px solid var(--line);
+  background: #faf9f6;
+  color: #292c25;
+}
+.product-dialog[open] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  align-items: center;
+}
+.product-dialog::backdrop {
+  background: #292c2580;
+}
+.product-dialog > img {
+  width: 100%;
+  max-height: 500px;
+  object-fit: contain;
+}
+.product-dialog h2 {
+  font-size: 30px;
+  margin: 15px 0;
+}
+.product-dialog p {
+  font-size: 12px;
+  line-height: 1.9;
+  margin: 12px 0;
+  color: var(--muted);
+}
+.product-dialog dl {
+  font-size: 11px;
+  line-height: 1.8;
+}
+.product-dialog dt {
+  font-weight: 600;
+}
+.product-dialog dd {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+.dialog-close {
+  position: absolute;
+  right: 10px;
+  top: 6px;
+  font-size: 28px;
+  padding: 0 9px;
+}
+.product-dialog .primary {
+  margin-top: 14px;
+}
+.preferences {
+  gap: 15px;
+}
+.preferences label {
+  max-width: 170px;
+}
+.filters {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.outfit-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 1050px) {
+  .hero-collage {
+    margin-left: 10px;
+    min-height: 320px;
+  }
+  .hero-collage img {
+    width: 52%;
+  }
+  .hero-collage img:nth-child(3) {
+    width: 42%;
+  }
+  .outfit-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .catalog-banner {
+    gap: 12px;
+  }
+  .catalog-banner > span:last-child {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .site-header nav {
+    gap: 10px;
+  }
+  .site-header nav button {
+    font-size: 11px;
+  }
+  .catalog-banner {
+    font-size: 9px;
+    padding: 9px 5%;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .catalog-banner > span:first-child {
+    font-size: 7px;
+    max-width: 72px;
+    white-space: normal;
+    flex-shrink: 0;
+  }
+  .hero {
+    padding-bottom: 30px;
+  }
+  .hero-collage {
+    min-height: 300px;
+    margin: 25px 8px 0;
+  }
+  .hero-collage img {
+    width: 43%;
+  }
+  .hero-collage img:nth-child(2) {
+    right: 0;
+  }
+  .hero-collage img:nth-child(3) {
+    width: 34%;
+    left: 37%;
+    bottom: 10px;
+  }
+  .hero-collage > span {
+    bottom: 0;
+    left: 0;
+    right: auto;
+    font-size: 7px;
+    text-align: left;
+  }
+  .hero-search-link {
+    font-size: 10px;
+  }
+  .sample-pill {
+    top: 8px;
+    left: 8px;
+    font-size: 6px;
+    padding: 5px 6px;
+    letter-spacing: 0.5px;
+  }
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .product-dialog[open] {
+    grid-template-columns: 1fr;
+    padding: 22px;
+    gap: 12px;
+  }
+  .product-dialog > img {
+    max-height: 240px;
+  }
+  .product-dialog h2 {
+    font-size: 25px;
+  }
+  .product-dialog {
+    max-height: 90vh;
+    overflow: auto;
+  }
+  .feed-tools select {
+    width: 130px;
+  }
+  .preferences label {
+    max-width: 45%;
+    min-width: 40%;
+  }
+  .outfit-grid {
+    gap: 12px;
+  }
+  .context-line {
+    line-height: 1.9;
+  }
+  .refine-chips {
+    margin-bottom: 15px;
+  }
+}

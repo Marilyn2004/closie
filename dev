@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT"
+MODE="${1:-demo}"
+STATE="$ROOT/.local"
+mkdir -p "$STATE"
+if [[ "$MODE" == "stop" ]]; then
+  for service in frontend backend; do
+    if [[ -f "$STATE/$service.pid" ]]; then
+      pid="$(cat "$STATE/$service.pid")"
+      if kill -0 "$pid" 2>/dev/null; then
+        command_line="$(ps -p "$pid" -o command=)"
+        if [[ "$command_line" == *"$ROOT"* ]]; then kill "$pid"; fi
+      fi
+    fi
+  done
+  echo "Closie application processes stopped. Database and data are preserved."
+  exit 0
+fi
+if [[ "$MODE" != "demo" && "$MODE" != "live" ]]; then echo "Usage: ./dev [demo|live|stop]"; exit 1; fi
+if [[ -f .env.local ]]; then
+  set -a
+  source .env.local
+  set +a
+fi
+if [[ -z "${JAVA_HOME:-}" ]] && command -v /usr/libexec/java_home >/dev/null 2>&1; then
+  export JAVA_HOME="$(/usr/libexec/java_home -v 21 2>/dev/null || true)"
+fi
+if ! command -v node >/dev/null 2>&1 || ! command -v pnpm >/dev/null 2>&1; then
+  echo "Install Node 22.12+ and pnpm 11, or put them on PATH. See README."
+  exit 1
+fi
+command -v docker >/dev/null 2>&1 || { echo "Docker is required."; exit 1; }
+docker info >/dev/null 2>&1 || { echo "Start Docker/Colima first."; exit 1; }
+CONTAINER=closie-v2-local-db
+if docker container inspect "$CONTAINER" >/dev/null 2>&1; then
+  mapping="$(docker inspect -f '{{range (index .HostConfig.PortBindings "5432/tcp")}}{{.HostIp}}:{{.HostPort}}{{end}}' "$CONTAINER")"
+  [[ "$mapping" == "127.0.0.1:55432" ]] || { echo "Existing Closie container has an unexpected port mapping; refusing to connect."; exit 1; }
+  docker start "$CONTAINER" >/dev/null
+else
+  if lsof -nP -iTCP:55432 -sTCP:LISTEN >/dev/null 2>&1; then echo "Port 55432 is occupied by another service. No database changes made."; exit 1; fi
+  docker run -d --name "$CONTAINER" -e POSTGRES_DB=fashion_search -e POSTGRES_USER=fashion -e POSTGRES_PASSWORD=fashion -p 127.0.0.1:55432:5432 -v closie_v2_local_pgdata:/var/lib/postgresql/data pgvector/pgvector:pg17 >/dev/null
+fi
+for ((i=0;i<30;i++)); do if docker exec "$CONTAINER" pg_isready -U fashion >/dev/null 2>&1; then break; fi; sleep 1; done
+if [[ "$MODE" == "demo" ]]; then
+  # This creates only the explicitly named demo DB, never drops or overwrites anything.
+  docker exec -i "$CONTAINER" psql -U fashion -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+SELECT 'CREATE DATABASE closie_demo' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='closie_demo')\gexec
+SQL
+  export DB_URL=jdbc:postgresql://127.0.0.1:55432/closie_demo
+  export SPRING_PROFILES_ACTIVE=demo
+  export CLOSIE_DEMO_ENABLED=true
+  export CLOSIE_REFRESH_ENABLED=false
+else
+  export DB_URL=jdbc:postgresql://127.0.0.1:55432/fashion_search
+  export SPRING_PROFILES_ACTIVE=default
+  export CLOSIE_DEMO_ENABLED=false
+fi
+export DB_USERNAME=fashion DB_PASSWORD=fashion
+if [[ ! -d frontend/node_modules ]]; then (cd frontend && pnpm install --frozen-lockfile); fi
+# Compile first; direct Java execution gives the launcher a PID it can safely manage.
+./mvnw -q -DskipTests compile dependency:build-classpath -Dmdep.outputFile=.local/classpath
+CLASSPATH="$ROOT/target/classes:$(cat "$STATE/classpath")"
+for port in 8080 5173; do
+  if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then echo "Port $port is already in use. Run ./dev stop for this checkout, or stop the other service."; exit 1; fi
+done
+nohup "${JAVA_HOME:+$JAVA_HOME/bin/}java" -cp "$CLASSPATH" com.fashionsearch.FashionSearchApplication > "$STATE/backend.log" 2>&1 &
+BACKEND_PID="$!"
+echo "$BACKEND_PID" > "$STATE/backend.pid"
+FRONTEND_PID=""
+trap 'kill "$BACKEND_PID" ${FRONTEND_PID:+"$FRONTEND_PID"} 2>/dev/null || true' EXIT
+trap 'exit 0' INT TERM
+for ((i=0;i<45;i++)); do
+  if curl -fsS http://127.0.0.1:8080/api/status > "$STATE/status.json" 2>/dev/null; then break; fi
+  if ! kill -0 "$(cat "$STATE/backend.pid")" 2>/dev/null; then echo "Backend failed. See .local/backend.log"; exit 1; fi
+  sleep 1
+done
+curl -fsS http://127.0.0.1:8080/api/status >/dev/null || { echo "Backend startup timed out. See .local/backend.log"; exit 1; }
+nohup node "$ROOT/frontend/node_modules/vite/bin/vite.js" "$ROOT/frontend" --host 127.0.0.1 --port 5173 > "$STATE/frontend.log" 2>&1 &
+FRONTEND_PID="$!"
+echo "$FRONTEND_PID" > "$STATE/frontend.pid"
+for ((i=0;i<20;i++)); do if curl -fsS http://127.0.0.1:5173 >/dev/null 2>&1; then break; fi; sleep 1; done
+curl -fsS http://127.0.0.1:5173/api/status >/dev/null || { echo "Frontend startup failed. See .local/frontend.log"; exit 1; }
+echo "Closie is ready: http://127.0.0.1:5173 ($MODE mode)"
+echo "Logs: .local/backend.log and .local/frontend.log. Stop app: ./dev stop"
+
+# Keep a visible development session alive; closing it stops only these owned application processes.
+wait "$BACKEND_PID" "$FRONTEND_PID"

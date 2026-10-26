@@ -42,14 +42,12 @@ test("Discover → Find → conversational refinement → Style", async ({
   await expect(page.locator(".context-line")).toContainText(
     "feminine · college · Up to $150.00",
   );
-  const product = page
-    .locator(".product")
-    .filter({
-      has: page.getByRole("heading", {
-        name: "Fixture ivory blouse",
-        exact: true,
-      }),
-    });
+  const product = page.locator(".product").filter({
+    has: page.getByRole("heading", {
+      name: "Fixture ivory blouse",
+      exact: true,
+    }),
+  });
   await expect(
     product.getByRole("link", { name: "View at Test retailer" }),
   ).toHaveAttribute("href", /^https:\/\/example.test\/products\//);
@@ -57,7 +55,9 @@ test("Discover → Find → conversational refinement → Style", async ({
   await page
     .getByLabel("Occasion, aesthetic & preferences")
     .fill("A feminine look for college");
-  await page.getByRole("button", { name: "Build my outfit" }).click();
+  await page
+    .getByRole("button", { name: /Build my outfit|Refine my outfit/ })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Consider it styled." }),
   ).toBeVisible();
@@ -68,7 +68,9 @@ test("Discover → Find → conversational refinement → Style", async ({
     fullPage: true,
   });
   await page.getByLabel("Total item budget (USD)").fill("10");
-  await page.getByRole("button", { name: "Build my outfit" }).click();
+  await page
+    .getByRole("button", { name: /Build my outfit|Refine my outfit/ })
+    .click();
   await expect(page.getByRole("alert")).toContainText(
     "Anchor currency or price",
   );

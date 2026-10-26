@@ -41,3 +41,7 @@ export function writeLocal(key, value) {
     /* Private browsing/storage limits do not block shopping. */
   }
 }
+export const safeImage = (product) =>
+  product.demo && /^\/demo\/[a-z-]+\.svg$/.test(product.imageUrl || "")
+    ? product.imageUrl
+    : safeUrl(product.imageUrl);
