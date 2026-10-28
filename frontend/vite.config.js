@@ -6,6 +6,10 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
+      "/concepts": {
+        target: process.env.CLOSIE_API_URL || "http://127.0.0.1:8080",
+        changeOrigin: true,
+      },
       "/demo": {
         target: process.env.CLOSIE_API_URL || "http://127.0.0.1:8080",
         changeOrigin: true,

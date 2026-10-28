@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
-MODE="${1:-demo}"
+MODE="${1:-studio}"
 STATE="$ROOT/.local"
 mkdir -p "$STATE"
 if [[ "$MODE" == "stop" ]]; then
@@ -18,7 +18,7 @@ if [[ "$MODE" == "stop" ]]; then
   echo "Closie application processes stopped. Database and data are preserved."
   exit 0
 fi
-if [[ "$MODE" != "demo" && "$MODE" != "live" ]]; then echo "Usage: ./dev [demo|live|stop]"; exit 1; fi
+if [[ "$MODE" != "demo" && "$MODE" != "live" && "$MODE" != "studio" ]]; then echo "Usage: ./dev [studio|demo|live|stop]"; exit 1; fi
 if [[ -f .env.local ]]; then
   set -a
   source .env.local
@@ -43,7 +43,14 @@ else
   docker run -d --name "$CONTAINER" -e POSTGRES_DB=fashion_search -e POSTGRES_USER=fashion -e POSTGRES_PASSWORD=fashion -p 127.0.0.1:55432:5432 -v closie_v2_local_pgdata:/var/lib/postgresql/data pgvector/pgvector:pg17 >/dev/null
 fi
 for ((i=0;i<30;i++)); do if docker exec "$CONTAINER" pg_isready -U fashion >/dev/null 2>&1; then break; fi; sleep 1; done
-if [[ "$MODE" == "demo" ]]; then
+if [[ "$MODE" == "studio" ]]; then
+  docker exec -i "$CONTAINER" psql -U fashion -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+SELECT 'CREATE DATABASE closie_studio' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='closie_studio')\gexec
+SQL
+  export DB_URL=jdbc:postgresql://127.0.0.1:55432/closie_studio
+  export SPRING_PROFILES_ACTIVE=studio
+  export CLOSIE_DEMO_ENABLED=false CLOSIE_REFRESH_ENABLED=false
+elif [[ "$MODE" == "demo" ]]; then
   # This creates only the explicitly named demo DB, never drops or overwrites anything.
   docker exec -i "$CONTAINER" psql -U fashion -d postgres -v ON_ERROR_STOP=1 <<'SQL'
 SELECT 'CREATE DATABASE closie_demo' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='closie_demo')\gexec
