@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @ConditionalOnProperty(name = "closie.studio.enabled", havingValue = "true")
+@org.springframework.core.annotation.Order(0)
 public class StudioService implements ApplicationRunner {
   final StudioStore store;
   final StudioAssets assets;
@@ -34,6 +35,11 @@ public class StudioService implements ApplicationRunner {
     this.engine = engine;
     this.vision = vision;
   }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.fashionsearch.demo.PublicDemoPolicy demoPolicy;
+
+  @org.springframework.beans.factory.annotation.Autowired private DemoConceptSearch demoSearch;
 
   public static String owner(String token) {
     if (token == null || !token.matches("[a-f0-9]{64}"))
@@ -147,8 +153,11 @@ public class StudioService implements ApplicationRunner {
           || colors.size() > 12
           || saved.size() > 200
           || hidden.size() > 200) throw new IllegalArgumentException("Invalid preferences.");
-      if (!StyleLibrary.STYLES.containsAll(aesthetics)
-          || colors.stream().anyMatch(c -> c.length() > 40)
+      if (aesthetics.stream().anyMatch(Objects::isNull)
+          || !StyleLibrary.STYLES.containsAll(aesthetics)
+          || colors.stream().anyMatch(c -> c == null || c.length() > 40)
+          || saved.stream().anyMatch(Objects::isNull)
+          || hidden.stream().anyMatch(Objects::isNull)
           || lifestyle == null
           || budget == null
           || lifestyle.length() > 500
@@ -204,7 +213,12 @@ public class StudioService implements ApplicationRunner {
 
   private int score(StudioStore.Document d, Preferences p) {
     var b = brief(latest(d));
-    return (p.aesthetics().contains(b.aesthetic()) ? 4 : 0)
+    boolean preferredStyle =
+        p.aesthetics().contains(b.aesthetic())
+            || java.util.stream.StreamSupport.stream(
+                    d.data().path("collections").spliterator(), false)
+                .anyMatch(node -> p.aesthetics().contains(node.asText()));
+    return (preferredStyle ? 4 : 0)
         + (p.colors().stream().anyMatch(c -> b.color().contains(c.toLowerCase(Locale.ROOT)))
             ? 3
             : 0)
@@ -231,6 +245,27 @@ public class StudioService implements ApplicationRunner {
 
   @Transactional
   public Map<String, Object> find(String owner, FindRequest request) {
+    if (demoPolicy.enabled()) {
+      StyleLibrary.Brief context = null;
+      if (request.conceptId() != null) {
+        var d = store.get(owner, request.conceptId());
+        if (!d.kind().equals("CONCEPT")) throw new IllegalArgumentException("Select a concept.");
+        context = brief(selected(d, request.revisionId()));
+      }
+      var found = demoSearch.search(request.message(), discover(owner, ""), context);
+      return Map.of(
+          "concepts",
+          found,
+          "interpretationMode",
+          "SAVED_CONCEPT_SEARCH",
+          "notice",
+          found.isEmpty()
+              ? "No existing concept matches that request. Try pink cardigan, blue hoodie, jeans or"
+                  + " a broader color. This demo searches pre-generated concepts; it does not"
+                  + " generate new images."
+              : "Found in the pre-generated concept capsule. These are existing AI inspirations,"
+                  + " not newly generated images or products for sale.");
+    }
     lockOwner(owner);
     quotaDocuments(owner);
     StyleLibrary.Brief previous = null;
@@ -337,6 +372,7 @@ public class StudioService implements ApplicationRunner {
   public StudioStore.Document revert(String owner, UUID id, UUID revision) {
     store.writable(owner, id);
     var d = store.get(owner, id);
+    if (demoPolicy.enabled() && !d.kind().equals("OUTFIT")) demoPolicy.requirePrivate();
     var old = selected(d, revision);
     store.append(id, latest(d).id(), old.data());
     return store.get(owner, id);
@@ -344,6 +380,7 @@ public class StudioService implements ApplicationRunner {
 
   @Transactional
   public StudioStore.Document identify(String owner, IdentifyRequest request) {
+    demoPolicy.requirePrivate();
     lockOwner(owner);
     quotaDocuments(owner);
     if (!Set.of("USER_PHOTO", "BRAND_MODEL", "PRODUCT_URL").contains(request.origin()))
@@ -429,6 +466,7 @@ public class StudioService implements ApplicationRunner {
 
   @Transactional
   public StudioStore.Document confirm(String owner, UUID id, ConfirmRequest r) {
+    demoPolicy.requirePrivate();
     store.writable(owner, id);
     var d = store.get(owner, id);
     if (!d.kind().equals("OWNED")) throw new IllegalArgumentException("Select an owned item.");
@@ -568,8 +606,14 @@ public class StudioService implements ApplicationRunner {
 
   @Transactional
   public StudioStore.Document replace(String owner, UUID id, ReplaceRequest request) {
-    store.writable(owner, id);
     var d = store.get(owner, id);
+    if (d.kind().equals("OUTFIT") && !isOwned(owner, id)) {
+      quotaDocuments(owner);
+      id = store.create(owner, "OUTFIT", d.data());
+      store.append(id, null, latest(d).data());
+      d = store.get(owner, id);
+    }
+    store.writable(owner, id);
     if (!d.kind().equals("OUTFIT")) throw new IllegalArgumentException("Select an outfit.");
     var old = latest(d);
     var anchorId = UUID.fromString(d.data().path("anchorId").asText());

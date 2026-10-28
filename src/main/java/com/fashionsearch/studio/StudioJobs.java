@@ -38,6 +38,9 @@ public class StudioJobs {
     this.limit = Math.max(0, Math.min(100, limit));
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.fashionsearch.demo.PublicDemoPolicy demoPolicy;
+
   public record Job(
       UUID id,
       UUID revisionId,
@@ -74,6 +77,7 @@ public class StudioJobs {
 
   @Transactional
   public Job enqueue(String owner, UUID id, UUID rid, boolean doll, boolean regenerate) {
+    demoPolicy.requirePrivate();
     if (!provider.configured())
       throw new IllegalArgumentException(
           "Live image generation is off. Configure a backend image provider and an approved"
@@ -185,6 +189,7 @@ public class StudioJobs {
 
   @Scheduled(fixedDelayString = "${closie.studio.worker-delay-ms:1500}")
   public void tick() {
+    if (demoPolicy.enabled()) return;
     if (!provider.configured()) return;
     // A crashed or timed-out request is failed, never automatically replayed (it may already be
     // billed).

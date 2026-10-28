@@ -44,7 +44,19 @@ public class StudioStore {
     return json.treeToValue(value, type);
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.fashionsearch.demo.PublicDemoPolicy demoPolicy;
+
+  private void capacity(String table, int limit) {
+    if (!demoPolicy.enabled()) return;
+    db.execute("SELECT pg_advisory_xact_lock(63117009)");
+    if (db.queryForObject("SELECT count(*) FROM " + table, Long.class) >= limit)
+      throw new IllegalArgumentException(
+          "Public demo storage is temporarily full. Your existing saved looks remain available.");
+  }
+
   public UUID create(String owner, String kind, Object payload) {
+    capacity("studio_documents", 10000);
     UUID id = UUID.randomUUID();
     db.update(
         "INSERT INTO studio_documents(id,owner,kind,payload) VALUES(?,?,?,?::jsonb)",
@@ -56,6 +68,7 @@ public class StudioStore {
   }
 
   public Revision append(UUID id, UUID parent, Object payload) {
+    capacity("studio_revisions", 20000);
     UUID rid = UUID.randomUUID();
     db.update(
         "INSERT INTO studio_revisions(id,document_id,parent_id,payload) VALUES(?,?,?,?::jsonb)",

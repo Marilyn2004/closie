@@ -59,8 +59,11 @@ public class OpenAiImages implements ImageGenerationProvider {
     return model;
   }
 
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.fashionsearch.demo.PublicDemoPolicy demoPolicy;
+
   public boolean configured() {
-    return enabled && !key.isBlank();
+    return (demoPolicy == null || !demoPolicy.enabled()) && enabled && !key.isBlank();
   }
 
   public String settingsKey() {

@@ -53,8 +53,15 @@ public class GeminiVision {
     }
   }
 
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.fashionsearch.demo.PublicDemoPolicy demoPolicy;
+
   public boolean configured() {
-    return enabled && !key.isBlank() && !model.isBlank() && limit > 0;
+    return (demoPolicy == null || !demoPolicy.enabled())
+        && enabled
+        && !key.isBlank()
+        && !model.isBlank()
+        && limit > 0;
   }
 
   public Optional<Attributes> identify(String owner, byte[] sanitizedPhoto) {

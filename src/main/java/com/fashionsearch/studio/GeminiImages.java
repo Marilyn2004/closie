@@ -46,8 +46,14 @@ public class GeminiImages implements ImageGenerationProvider {
       throw new IllegalArgumentException("Invalid image model name.");
   }
 
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.fashionsearch.demo.PublicDemoPolicy demoPolicy;
+
   public boolean configured() {
-    return enabled && !key.isBlank() && !model.isBlank();
+    return (demoPolicy == null || !demoPolicy.enabled())
+        && enabled
+        && !key.isBlank()
+        && !model.isBlank();
   }
 
   public String model() {

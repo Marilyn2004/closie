@@ -24,7 +24,11 @@ public class ImageSpendLedger {
     this.maxRequests = Math.max(0, Math.min(12, maxRequests));
   }
 
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.fashionsearch.demo.PublicDemoPolicy demoPolicy;
+
   public void reserve(UUID job, String owner, String model) {
+    if (demoPolicy != null) demoPolicy.requirePrivate();
     tx.executeWithoutResult(
         status -> {
           store.jdbc().execute("SELECT pg_advisory_xact_lock(63117008)");

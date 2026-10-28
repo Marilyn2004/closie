@@ -25,8 +25,21 @@ public class CatalogStatusController {
     this.model = model;
   }
 
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.fashionsearch.demo.PublicDemoPolicy demoPolicy;
+
   @GetMapping("/api/status")
   public Map<String, Object> status() {
+    if (demoPolicy != null && demoPolicy.enabled())
+      return Map.of(
+          "catalogMode",
+          "public-demo",
+          "aiConfigured",
+          false,
+          "eligibleProducts",
+          0,
+          "notice",
+          "Pre-generated AI fashion inspiration; no live generation or shopping availability.");
     return Map.of(
         "catalogMode",
         demo ? "demo" : "live",

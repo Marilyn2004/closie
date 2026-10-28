@@ -90,7 +90,7 @@ public class StudioAssets {
   }
 
   public byte[] reference(String owner, String ref) throws IOException {
-    if (ref.startsWith("/concepts/") && ref.matches("/concepts/[a-z-]+\\.png")) {
+    if (ref.startsWith("/concepts/") && ref.matches("/concepts/[a-z-]+\\.(png|jpg)")) {
       try (var stream = getClass().getResourceAsStream("/static" + ref)) {
         if (stream == null) throw StudioStore.missing();
         return stream.readAllBytes();

@@ -23,7 +23,7 @@ function Picture({ src, alt, ...props }) {
           else URL.revokeObjectURL(v);
         })
         .catch(() => {});
-    else if (/^\/concepts\/[a-z-]+\.png$/.test(src || "")) setUrl(src);
+    else if (/^\/concepts\/[a-z-]+\.(png|jpg)$/.test(src || "")) setUrl(src);
     return () => {
       active = false;
       if (blob) URL.revokeObjectURL(blob);
@@ -58,6 +58,8 @@ export default function StudioApp() {
     [jobs, setJobs] = useState([]),
     [outfit, setOutfit] = useState(null),
     [replaceSlot, setReplaceSlot] = useState("");
+  const [collection, setCollection] = useState("");
+  const isPublic = !!status?.publicDemo;
   const [unusedPhotos, setUnusedPhotos] = useState([]);
   const [analyzePhoto, setAnalyzePhoto] = useState(false);
   const [origin, setOrigin] = useState("USER_PHOTO"),
@@ -205,6 +207,13 @@ export default function StudioApp() {
         conceptId: selected.id,
         revisionId: current.id,
       });
+      if (isPublic) {
+        setResults(r.concepts);
+        setSelected(null);
+        setTab("Find");
+        setNotice(r.notice);
+        return;
+      }
       const d = r.concepts[0];
       open(d);
       setResults((old) => [d, ...old.filter((x) => x.id !== d.id)]);
@@ -310,7 +319,11 @@ export default function StudioApp() {
   const filtered = all.filter(
     (d) =>
       (!category || last(d)?.data.brief.category === category) &&
-      !prefs.hidden.includes(d.id),
+      !prefs.hidden.includes(d.id) &&
+      (!collection ||
+        (d.data.collections || [last(d)?.data.brief.aesthetic]).includes(
+          collection,
+        )),
   );
   const listing =
     tab === "Saved"
@@ -347,6 +360,12 @@ export default function StudioApp() {
         </span>
       </header>
       <main>
+        {isPublic && (
+          <p className="notice" role="status">
+            Public demo · Browse, search and remix pre-generated AI concepts.
+            Live image generation and private uploads are disabled.
+          </p>
+        )}
         <div className="studio-ribbon">
           YOUR PERSONAL AI STYLIST <span>✦</span> A little inspiration. A lot
           more you.
@@ -444,11 +463,17 @@ export default function StudioApp() {
               ))}
             </div>
             <p className="fine">
-              Curated rules prepare design directions. Live generation:{" "}
-              {status?.imageConfigured
-                ? "configured; each image needs your request"
-                : "off · briefs and the original capsule remain available"}
-              . Concepts are inspiration, not products for sale.
+              {isPublic ? (
+                "Search the existing concept capsule in everyday language. Results are pre-generated AI inspiration, not new live images or products for sale."
+              ) : (
+                <>
+                  Curated rules prepare design directions. Live generation:{" "}
+                  {status?.imageConfigured
+                    ? "configured; each image needs your request"
+                    : "off · briefs and the original capsule remain available"}
+                  . Concepts are inspiration, not products for sale.
+                </>
+              )}
             </p>
             {history.length > 0 && (
               <details>
@@ -486,8 +511,14 @@ export default function StudioApp() {
             </section>
             {tab === "Discover" && (
               <div className="categories">
-                {[["", "For you"], ...Object.entries(slots)].map(
-                  ([key, label]) => (
+                {[["", "For you"], ...Object.entries(slots)]
+                  .filter(
+                    ([key]) =>
+                      !isPublic ||
+                      !key ||
+                      all.some((d) => last(d).data.brief.category === key),
+                  )
+                  .map(([key, label]) => (
                     <button
                       key={key}
                       className={category === key ? "chosen" : ""}
@@ -495,9 +526,23 @@ export default function StudioApp() {
                     >
                       {label}
                     </button>
-                  ),
-                )}
+                  ))}
               </div>
+            )}
+            {tab === "Discover" && isPublic && (
+              <label className="collection-filter">
+                Style collection
+                <select
+                  aria-label="Style collection"
+                  value={collection}
+                  onChange={(e) => setCollection(e.target.value)}
+                >
+                  <option value="">All campus styles</option>
+                  {status?.aesthetics.map((a) => (
+                    <option key={a}>{a}</option>
+                  ))}
+                </select>
+              </label>
             )}
             <div className="concept-grid">
               {listing.map((d, i) => {
@@ -531,7 +576,9 @@ export default function StudioApp() {
                       </button>
                       <span className="concept-tag">
                         {r.data.state === "READY"
-                          ? "FASHION CONCEPT"
+                          ? isPublic
+                            ? "PRE-GENERATED AI"
+                            : "FASHION CONCEPT"
                           : "DESIGN BRIEF"}
                       </span>
                     </div>
@@ -571,6 +618,26 @@ export default function StudioApp() {
               </div>
             )}
           </>
+        )}
+        {tab === "Saved" && outfits.some((d) => prefs.saved.includes(d.id)) && (
+          <section>
+            <h2>Saved looks</h2>
+            <div className="categories">
+              {outfits
+                .filter((d) => prefs.saved.includes(d.id))
+                .map((d, i) => (
+                  <button
+                    key={d.id}
+                    onClick={() => {
+                      setOutfit(d);
+                      setTab("Style");
+                    }}
+                  >
+                    View saved look {d.data.title || i + 1}
+                  </button>
+                ))}
+            </div>
+          </section>
         )}
         {tab === "My Style" && (
           <section className="settings">
@@ -763,18 +830,29 @@ export default function StudioApp() {
                 <div className="actions">
                   <button
                     className="primary"
-                    disabled={busy}
-                    onClick={() => generate(outfit, currentOutfit.id, true)}
+                    onClick={() => run(() => save(outfit))}
                   >
-                    Try a doll preview ✧
+                    {prefs.saved.includes(outfit.id)
+                      ? "♥ Look saved"
+                      : "♡ Save look"}
                   </button>
+                  {!isPublic && (
+                    <button
+                      className="primary"
+                      disabled={busy}
+                      onClick={() => generate(outfit, currentOutfit.id, true)}
+                    >
+                      Try a doll preview ✧
+                    </button>
+                  )}
                   <button onClick={() => setOutfit(null)}>
                     Start another outfit
                   </button>
                 </div>
                 <p className="fine">
-                  Optional generated illustration. Garment details may differ.
-                  Only runs when requested and a provider is configured.
+                  {isPublic
+                    ? "Doll previews and live generation are disabled in this public demo. Changing a piece reuses an existing concept image."
+                    : "Optional generated illustration. Garment details may differ. Only runs when requested and a provider is configured."}
                 </p>
                 <details>
                   <summary>
@@ -800,186 +878,212 @@ export default function StudioApp() {
                 </details>
               </section>
             )}
-            <section className="owned-form">
-              <p className="eyebrow">STYLE MY ITEM</p>
-              <h2>Already yours. Fresh possibilities.</h2>
-              <div className="categories">
-                {[
-                  ["USER_PHOTO", "Upload a photo"],
-                  ["BRAND_MODEL", "Brand / model"],
-                  ["PRODUCT_URL", "Product link"],
-                ].map(([key, title]) => (
-                  <button
-                    key={key}
-                    className={origin === key ? "chosen" : ""}
-                    onClick={() => {
-                      setOrigin(key);
-                      setIdentification(null);
-                    }}
-                  >
-                    {title}
-                  </button>
-                ))}
-              </div>
-              <form onSubmit={identify}>
-                {origin === "USER_PHOTO" && (
-                  <>
-                    <label className="upload">
-                      ＋ Add a garment photo
+            {isPublic && (
+              <section className="owned-form">
+                <p className="eyebrow">STYLE MY ITEM</p>
+                <h2>Already yours. Fresh possibilities.</h2>
+                <div className="categories">
+                  <button disabled>Upload a photo</button>
+                  <button disabled>Brand / model</button>
+                  <button disabled>Product link</button>
+                </div>
+                <p>
+                  Private uploads, photo recognition and retailer matching are
+                  unavailable in this public demo. Try Style this on a sample
+                  concept or open a pre-arranged look below.
+                </p>
+                <p className="fine">
+                  The private local mode keeps the existing item-confirmation
+                  workflow. No recognition or exact product match is simulated
+                  here.
+                </p>
+              </section>
+            )}
+            {!isPublic && (
+              <section className="owned-form">
+                <p className="eyebrow">STYLE MY ITEM</p>
+                <h2>Already yours. Fresh possibilities.</h2>
+                <div className="categories">
+                  {[
+                    ["USER_PHOTO", "Upload a photo"],
+                    ["BRAND_MODEL", "Brand / model"],
+                    ["PRODUCT_URL", "Product link"],
+                  ].map(([key, title]) => (
+                    <button
+                      key={key}
+                      className={origin === key ? "chosen" : ""}
+                      onClick={() => {
+                        setOrigin(key);
+                        setIdentification(null);
+                      }}
+                    >
+                      {title}
+                    </button>
+                  ))}
+                </div>
+                <form onSubmit={identify}>
+                  {origin === "USER_PHOTO" && (
+                    <>
+                      <label className="upload">
+                        ＋ Add a garment photo
+                        <input
+                          aria-label="Garment photo"
+                          type="file"
+                          accept="image/png,image/jpeg"
+                          onChange={(e) => upload(e.target.files[0])}
+                        />
+                      </label>
+                      {photo && (
+                        <div className="uploaded">
+                          <Picture
+                            src={photo}
+                            alt="Your private garment photo"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              run(async () => {
+                                await api(
+                                  photo.replace("/api/studio", ""),
+                                  undefined,
+                                  "DELETE",
+                                );
+                                setPhoto("");
+                              })
+                            }
+                          >
+                            Delete uploaded photo
+                          </button>
+                        </div>
+                      )}
+                      {status?.visionConfigured && (
+                        <label className="photo-consent">
+                          <input
+                            type="checkbox"
+                            checked={analyzePhoto}
+                            onChange={(e) => setAnalyzePhoto(e.target.checked)}
+                          />{" "}
+                          Analyze this garment photo with Gemini (optional)
+                        </label>
+                      )}
+                      <p className="fine">
+                        PNG or JPEG, up to 8 MB. Private metadata is stripped.
+                        {status?.visionConfigured
+                          ? "Optional AI analysis sends the sanitized garment photo to Gemini only when you opt in below."
+                          : "Describe and confirm your garment; automatic vision is not enabled."}
+                      </p>
+                    </>
+                  )}
+                  {origin === "PRODUCT_URL" && (
+                    <label>
+                      Retailer product link
                       <input
-                        aria-label="Garment photo"
-                        type="file"
-                        accept="image/png,image/jpeg"
-                        onChange={(e) => upload(e.target.files[0])}
+                        type="url"
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        placeholder="https://…"
+                        required
                       />
                     </label>
-                    {photo && (
-                      <div className="uploaded">
-                        <Picture src={photo} alt="Your private garment photo" />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            run(async () => {
-                              await api(
-                                photo.replace("/api/studio", ""),
-                                undefined,
-                                "DELETE",
-                              );
-                              setPhoto("");
-                            })
-                          }
-                        >
-                          Delete uploaded photo
-                        </button>
-                      </div>
-                    )}
-                    {status?.visionConfigured && (
-                      <label className="photo-consent">
-                        <input
-                          type="checkbox"
-                          checked={analyzePhoto}
-                          onChange={(e) => setAnalyzePhoto(e.target.checked)}
-                        />{" "}
-                        Analyze this garment photo with Gemini (optional)
-                      </label>
-                    )}
-                    <p className="fine">
-                      PNG or JPEG, up to 8 MB. Private metadata is stripped.
-                      {status?.visionConfigured
-                        ? "Optional AI analysis sends the sanitized garment photo to Gemini only when you opt in below."
-                        : "Describe and confirm your garment; automatic vision is not enabled."}
-                    </p>
-                  </>
-                )}
-                {origin === "PRODUCT_URL" && (
+                  )}
                   <label>
-                    Retailer product link
-                    <input
-                      type="url"
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      placeholder="https://…"
+                    {origin === "BRAND_MODEL"
+                      ? "Brand, product name, model / SKU and color"
+                      : "Describe your garment"}
+                    <textarea
+                      maxLength={1200}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="My black puffer jacket, relaxed fit…"
                       required
                     />
                   </label>
-                )}
-                <label>
-                  {origin === "BRAND_MODEL"
-                    ? "Brand, product name, model / SKU and color"
-                    : "Describe your garment"}
-                  <textarea
-                    maxLength={1200}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="My black puffer jacket, relaxed fit…"
-                    required
-                  />
-                </label>
-                <button
-                  className="primary"
-                  disabled={busy || (origin === "USER_PHOTO" && !photo)}
-                >
-                  Identify & review ↗
-                </button>
-              </form>
-              <p className="fine">
-                We only look for currently eligible records in the configured
-                catalog. We do not scrape arbitrary retailer pages. No exact
-                match? You can still style your item.
-              </p>
-              {identification && (
-                <div className="confirmation">
-                  <h3>Does this look right?</h3>
-                  <span className="pill">
-                    {identification.data.matchStatus.replaceAll("_", " ")}
-                  </span>
-                  <p>{identification.data.identification}</p>
-                  {identification.data.candidates.map((c, i) => (
-                    <p key={i}>
-                      {c.product.title} — {c.status.replaceAll("_", " ")}.{" "}
-                      {c.evidence}
-                    </p>
-                  ))}
-                  <label>
-                    Category
-                    <select
-                      value={confirmation.category}
-                      onChange={(e) =>
-                        setConfirmation((c) => ({
-                          ...c,
-                          category: e.target.value,
-                        }))
-                      }
-                    >
-                      {Object.entries(slots).map(([key, title]) => (
-                        <option key={key} value={key}>
-                          {title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {["color", "fit", "details"].map((key) => (
-                    <label key={key}>
-                      {key}
-                      <input
-                        maxLength={500}
-                        value={confirmation[key]}
+                  <button
+                    className="primary"
+                    disabled={busy || (origin === "USER_PHOTO" && !photo)}
+                  >
+                    Identify & review ↗
+                  </button>
+                </form>
+                <p className="fine">
+                  We only look for currently eligible records in the configured
+                  catalog. We do not scrape arbitrary retailer pages. No exact
+                  match? You can still style your item.
+                </p>
+                {identification && (
+                  <div className="confirmation">
+                    <h3>Does this look right?</h3>
+                    <span className="pill">
+                      {identification.data.matchStatus.replaceAll("_", " ")}
+                    </span>
+                    <p>{identification.data.identification}</p>
+                    {identification.data.candidates.map((c, i) => (
+                      <p key={i}>
+                        {c.product.title} — {c.status.replaceAll("_", " ")}.{" "}
+                        {c.evidence}
+                      </p>
+                    ))}
+                    <label>
+                      Category
+                      <select
+                        value={confirmation.category}
                         onChange={(e) =>
                           setConfirmation((c) => ({
                             ...c,
-                            [key]: e.target.value,
+                            category: e.target.value,
                           }))
                         }
-                      />
+                      >
+                        {Object.entries(slots).map(([key, title]) => (
+                          <option key={key} value={key}>
+                            {title}
+                          </option>
+                        ))}
+                      </select>
                     </label>
-                  ))}
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={() =>
-                      run(async () => {
-                        const d = await api(
-                          "/owned/" + identification.id + "/confirm",
-                          confirmation,
-                        );
-                        setIdentification(d);
-                        const o = await api("/outfits", {
-                          anchorId: d.id,
-                          message: occasion,
-                        });
-                        setOutfit(o);
-                        await refresh();
-                      })
-                    }
-                  >
-                    Confirm my item & style it ↗
-                  </button>
-                  <button onClick={() => remove(identification)}>
-                    Delete this item & photo
-                  </button>
-                </div>
-              )}
-            </section>
+                    {["color", "fit", "details"].map((key) => (
+                      <label key={key}>
+                        {key}
+                        <input
+                          maxLength={500}
+                          value={confirmation[key]}
+                          onChange={(e) =>
+                            setConfirmation((c) => ({
+                              ...c,
+                              [key]: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    ))}
+                    <button
+                      className="primary"
+                      disabled={busy}
+                      onClick={() =>
+                        run(async () => {
+                          const d = await api(
+                            "/owned/" + identification.id + "/confirm",
+                            confirmation,
+                          );
+                          setIdentification(d);
+                          const o = await api("/outfits", {
+                            anchorId: d.id,
+                            message: occasion,
+                          });
+                          setOutfit(o);
+                          await refresh();
+                        })
+                      }
+                    >
+                      Confirm my item & style it ↗
+                    </button>
+                    <button onClick={() => remove(identification)}>
+                      Delete this item & photo
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
             {unusedPhotos.length > 0 && (
               <section>
                 <h3>Unattached private photos</h3>
@@ -1047,12 +1151,21 @@ export default function StudioApp() {
             )}
             {outfits.length > 0 && (
               <section>
-                <h2>Your saved boards</h2>
+                <h2>{isPublic ? "Outfit collection" : "Your outfit boards"}</h2>
                 <div className="categories">
                   {outfits.map((d, i) => (
-                    <button key={d.id} onClick={() => setOutfit(d)}>
-                      Outfit {i + 1} · {d.revisions.length} versions
-                    </button>
+                    <React.Fragment key={d.id}>
+                      <button onClick={() => setOutfit(d)}>
+                        View {d.data.title || `Outfit ${i + 1}`} ·{" "}
+                        {d.revisions.length} versions
+                      </button>
+                      <button
+                        aria-label={`Save look ${d.data.title || i + 1}`}
+                        onClick={() => run(() => save(d))}
+                      >
+                        {prefs.saved.includes(d.id) ? "♥" : "♡"}
+                      </button>
+                    </React.Fragment>
                   ))}
                 </div>
               </section>
@@ -1104,10 +1217,14 @@ export default function StudioApp() {
             Your personal AI stylist. Original concepts, real possibilities.
           </p>
           <small>
-            Local concept studio · curated capsule + structured design briefs ·{" "}
-            {status?.imageConfigured
-              ? "image provider configured"
-              : "live image generation not configured"}
+            {isPublic
+              ? "Public demo · pre-generated AI concepts · "
+              : "Local concept studio · curated capsule + structured design briefs · "}{" "}
+            {isPublic
+              ? "live image generation disabled"
+              : status?.imageConfigured
+                ? "image provider configured"
+                : "live image generation not configured"}
           </small>
         </footer>
       </main>
@@ -1136,7 +1253,11 @@ export default function StudioApp() {
               />
             </div>
             <div className="detail-copy">
-              <p className="eyebrow">FASHION CONCEPT · NOT FOR SALE</p>
+              <p className="eyebrow">
+                {isPublic
+                  ? "PRE-GENERATED AI CONCEPT · NOT FOR SALE"
+                  : "FASHION CONCEPT · NOT FOR SALE"}
+              </p>
               <h2>
                 {current.data.brief.color} {current.data.brief.garment}
               </h2>
@@ -1158,7 +1279,9 @@ export default function StudioApp() {
               </div>
               <form onSubmit={edit}>
                 <label>
-                  Make it yours
+                  {isPublic
+                    ? "Find similar existing concepts"
+                    : "Make it yours"}
                   <input
                     aria-label="Refine concept"
                     value={message}
@@ -1168,19 +1291,32 @@ export default function StudioApp() {
                     required
                   />
                 </label>
-                <button disabled={busy}>Save a new design version ↗</button>
+                <button disabled={busy}>
+                  {isPublic
+                    ? "Search this refinement ↗"
+                    : "Save a new design version ↗"}
+                </button>
               </form>
-              <button
-                disabled={busy}
-                onClick={() => generate(selected, current.id)}
-              >
-                Generate this version's image ✧
-              </button>
-              <p className="fine">
-                {current.data.provider} ·{" "}
-                {current.data.quality ||
-                  "Image not yet generated. Previous images are kept in history."}
-              </p>
+              {isPublic ? (
+                <p className="fine">
+                  Pre-generated AI fashion inspiration. Live image editing,
+                  regeneration and doll previews are unavailable in this demo.
+                </p>
+              ) : (
+                <>
+                  <button
+                    disabled={busy}
+                    onClick={() => generate(selected, current.id)}
+                  >
+                    Generate this version's image ✧
+                  </button>
+                  <p className="fine">
+                    {current.data.provider} ·{" "}
+                    {current.data.quality ||
+                      "Image not yet generated. Previous images are kept in history."}
+                  </p>
+                </>
+              )}
               <details>
                 <summary>Design brief & assumptions</summary>
                 <dl>
@@ -1221,7 +1357,7 @@ export default function StudioApp() {
                   Restore this version
                 </button>
               )}
-              {!current.data.provider?.includes("CURATED") && (
+              {!isPublic && !current.data.provider?.includes("CURATED") && (
                 <button onClick={() => remove(selected)}>
                   Delete concept & generated images
                 </button>

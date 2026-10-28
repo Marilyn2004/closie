@@ -954,3 +954,10 @@ body {
   width: auto;
   margin: 0;
 }
+.studio .collection-filter {
+  max-width: 280px;
+  margin: 0 0 22px;
+}
+.studio button:disabled {
+  cursor: default;
+}

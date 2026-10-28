@@ -32,23 +32,37 @@ public class StudioController {
     this.vision = vision;
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.fashionsearch.demo.PublicDemoPolicy demoPolicy;
+
   @GetMapping("/status")
   public Object status() {
-    return Map.of(
-        "enabled",
-        true,
-        "imageConfigured",
-        provider.configured(),
-        "provider",
-        Objects.toString(provider.name(), "GEMINI"),
-        "model",
-        Objects.toString(provider.model(), ""),
-        "interpretation",
-        "CURATED_RULES",
-        "visionConfigured",
-        vision.configured(),
-        "aesthetics",
-        StyleLibrary.STYLES);
+    var status =
+        new LinkedHashMap<String, Object>(
+            Map.of(
+                "enabled",
+                true,
+                "imageConfigured",
+                provider.configured(),
+                "provider",
+                Objects.toString(provider.name(), "GEMINI"),
+                "model",
+                Objects.toString(provider.model(), ""),
+                "interpretation",
+                "CURATED_RULES",
+                "visionConfigured",
+                vision.configured(),
+                "aesthetics",
+                StyleLibrary.STYLES));
+    status.put("publicDemo", demoPolicy.enabled());
+    if (demoPolicy.enabled()) {
+      status.put("imageConfigured", false);
+      status.put("visionConfigured", false);
+      status.put("provider", "DISABLED_IN_PUBLIC_DEMO");
+      status.put("model", "");
+      status.put("interpretation", "SAVED_CONCEPT_SEARCH");
+    }
+    return status;
   }
 
   @GetMapping("/discover")
@@ -68,7 +82,9 @@ public class StudioController {
       @RequestHeader("X-Studio-Session") String session, @RequestParam String kind) {
     if (!Set.of("CONCEPT", "OWNED", "OUTFIT").contains(kind))
       throw new IllegalArgumentException("Invalid type.");
-    return store.list(StudioService.owner(session), kind);
+    String owner = StudioService.owner(session);
+    if (demoPolicy.enabled() && kind.equals("OWNED")) return List.of();
+    return store.list(owner, kind);
   }
 
   @PostMapping("/find")
@@ -205,6 +221,7 @@ public class StudioController {
   @GetMapping("/jobs")
   public Object jobs(@RequestHeader("X-Studio-Session") String session) {
     String owner = StudioService.owner(session);
+    if (demoPolicy.enabled()) return List.of();
     return store
         .jdbc()
         .query(
@@ -227,6 +244,7 @@ public class StudioController {
   public Object upload(
       @RequestHeader("X-Studio-Session") String session, @RequestParam MultipartFile file)
       throws Exception {
+    demoPolicy.requirePrivate();
     String owner = StudioService.owner(session);
     if (store
             .jdbc()
@@ -244,6 +262,7 @@ public class StudioController {
   @GetMapping("/uploads")
   public Object uploads(@RequestHeader("X-Studio-Session") String session) {
     String owner = StudioService.owner(session);
+    if (demoPolicy.enabled()) return List.of();
     return store
         .jdbc()
         .query(

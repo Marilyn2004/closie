@@ -18,3 +18,9 @@ Individual subjects:
 Agent visual inspection: all six files display a complete item/pair, plain background, no visible person or logo, coherent pastel palette. This is qualitative inspection, not a numerical quality benchmark or user aesthetic approval. All six still require the user's aesthetic approval.
 
 Application-generated images use separate private asset storage, with actual provider/model metadata attached to the corresponding revision/job. No generated concept receives invented commerce facts.
+
+## Public Demo v1.0 addition
+
+`blue-cardigan.jpg` is the existing OpenAI verification output from 2026-10-28, copied from the private local verification artifact into the immutable public demo bundle. It is an original baby-blue fitted ribbed cardigan with pearl-like buttons, generated with `gpt-image-2.5-flare-2026-09-08` at low / 1024x1024. See OPENAI_IMAGES.md for the one-request evidence and $0.00684 usage estimate. No new model request was made for public demo preparation.
+
+The public capsule has seven images across tops, bottoms, shoes and bags. Two pre-arranged boards reuse these original item assets; they are not new AI-generated collages. No dresses, outerwear or jewelry were added through mock or retailer imagery. Human aesthetic acceptance remains distinct from the agent's visual inspection.

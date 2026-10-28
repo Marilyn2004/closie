@@ -1,0 +1,55 @@
+# Standalone, non-billable public portfolio demo. Never combine with the private studio profile.
+server:
+  address: 0.0.0.0
+  port: ${PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+  tomcat:
+    threads:
+      max: 24
+      min-spare: 2
+    max-http-form-post-size: 32KB
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:55432/closie_public_demo}
+    username: ${DB_USERNAME:fashion}
+    password: ${DB_PASSWORD:fashion}
+    hikari:
+      maximum-pool-size: 4
+      minimum-idle: 1
+  servlet:
+    multipart:
+      enabled: false
+closie:
+  public-demo:
+    enabled: true
+  studio:
+    enabled: true
+    image-provider: openai
+    generation-enabled: false
+    asset-path: /tmp/closie-public-unused-assets
+    text-daily-limit: 0
+    daily-limit: 0
+    vision-enabled: false
+    key: ''
+    image-model: ''
+    openai:
+      key: ''
+      max-paid-requests: 0
+  ai:
+    enabled: false
+    key: ''
+    model: ''
+  refresh:
+    enabled: false
+  demo:
+    enabled: false
+  ebay-accounts:
+    enabled: false
+  ebay-notifications:
+    enabled: false
+  providers:
+    permitted-sources: ''
+    ebay:
+      display-enabled: false

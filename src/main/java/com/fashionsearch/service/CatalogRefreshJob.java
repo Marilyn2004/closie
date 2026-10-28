@@ -16,11 +16,15 @@ public class CatalogRefreshJob {
     this.properties = properties;
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.fashionsearch.demo.PublicDemoPolicy demoPolicy;
+
   @Scheduled(
       initialDelay = 60000,
       fixedDelayString =
           "#{T(java.lang.Math).max(3600000, ${closie.refresh.interval-ms:14400000})}")
   public void refresh() {
+    if (demoPolicy.enabled()) return;
     if (properties.getClientId().isBlank() || properties.getClientSecret().isBlank()) {
       org.slf4j.LoggerFactory.getLogger(getClass())
           .warn("catalog_refresh skipped reason=credentials_missing");
