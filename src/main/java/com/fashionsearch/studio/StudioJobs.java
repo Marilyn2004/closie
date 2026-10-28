@@ -19,6 +19,7 @@ public class StudioJobs {
   final ImageGenerationProvider provider;
   final TransactionTemplate tx;
   final int limit;
+  final ImageSpendLedger spend;
 
   public StudioJobs(
       StudioStore store,
@@ -26,7 +27,9 @@ public class StudioJobs {
       StudioAssets assets,
       ImageGenerationProvider provider,
       PlatformTransactionManager manager,
+      ImageSpendLedger spend,
       @Value("${closie.studio.daily-limit:12}") int limit) {
+    this.spend = spend;
     this.store = store;
     this.studio = studio;
     this.assets = assets;
@@ -66,9 +69,14 @@ public class StudioJobs {
 
   @Transactional
   public Job enqueue(String owner, UUID id, UUID rid, boolean doll) {
+    return enqueue(owner, id, rid, doll, false);
+  }
+
+  @Transactional
+  public Job enqueue(String owner, UUID id, UUID rid, boolean doll, boolean regenerate) {
     if (!provider.configured())
       throw new IllegalArgumentException(
-          "Live image generation is off. Configure the server-side Gemini provider and an approved"
+          "Live image generation is off. Configure a backend image provider and an approved"
               + " request limit first. Your design brief is saved.");
     store.jdbc().execute("SELECT pg_advisory_xact_lock(63117002)");
     var d = store.get(owner, id);
@@ -88,6 +96,18 @@ public class StudioJobs {
                 revision.id(),
                 op);
     if (!existing.isEmpty()) return existing.getFirst();
+    int prior =
+        store
+            .jdbc()
+            .queryForObject(
+                "SELECT count(*) FROM studio_jobs WHERE owner=? AND revision_id=? AND operation=?",
+                Integer.class,
+                owner,
+                revision.id(),
+                op);
+    if (prior >= 2)
+      throw new IllegalArgumentException(
+          "This image version has reached its two-attempt limit. Previous images are preserved.");
     Long all =
         store
             .jdbc()
@@ -133,8 +153,23 @@ public class StudioJobs {
             owner,
             revision.id(),
             op,
-            store.encode(Map.of("prompt", prompt, "reference", reference)));
+            store.encode(
+                Map.of(
+                    "prompt",
+                    prompt,
+                    "reference",
+                    reference,
+                    "provider",
+                    Objects.toString(provider.name(), "GEMINI"),
+                    "settings",
+                    Objects.toString(provider.settingsKey(), provider.model()),
+                    "regenerate",
+                    regenerate)));
     return get(owner, job);
+  }
+
+  public Map<String, Object> budgetSummary() {
+    return spend.summary();
   }
 
   public Job cancel(String owner, UUID id) {
@@ -186,64 +221,134 @@ public class StudioJobs {
       var input = (JsonNode) work.get("input");
       String ref = input.path("reference").asText();
       byte[] reference = ref.isBlank() ? null : assets.reference(owner, ref);
-      byte[] generated = provider.generate(input.path("prompt").asText(), reference);
-      tx.executeWithoutResult(
-          status -> {
-            var current =
-                store
-                    .jdbc()
-                    .query(
-                        "SELECT state FROM studio_jobs WHERE id=? FOR UPDATE",
-                        (r, n) -> r.getString(1),
-                        id);
-            if (current.isEmpty() || !current.getFirst().equals("RUNNING")) return;
-            String image;
+      String selectedProvider = Objects.toString(provider.name(), "GEMINI");
+      String settings = Objects.toString(provider.settingsKey(), provider.model());
+      if (!input.path("provider").asText().equals(selectedProvider)
+          || !input.path("settings").asText().equals(settings))
+        throw new IllegalArgumentException(
+            "Image provider configuration changed. Submit a new image version before retrying.");
+      String prompt = input.path("prompt").asText();
+      if (selectedProvider.equals("OPENAI")) OpenAiImageCost.generationEstimate(prompt);
+      String fingerprint = fingerprint(owner, settings, prompt, reference);
+      store.jdbc().update("UPDATE studio_jobs SET request_key=? WHERE id=?", fingerprint, id);
+      if (!input.path("regenerate").asBoolean()) {
+        var cached =
+            store
+                .jdbc()
+                .query(
+                    "SELECT result FROM studio_jobs WHERE owner=? AND request_key=? AND"
+                        + " state='SUCCEEDED' AND id<>? ORDER BY updated_at DESC LIMIT 1",
+                    (r, n) -> store.decode(r.getString(1)),
+                    owner,
+                    fingerprint,
+                    id);
+        if (!cached.isEmpty()) {
+          var metadata =
+              new LinkedHashMap<String, Object>(
+                  store.mapper().convertValue(cached.getFirst(), Map.class));
+          try {
+            byte[] cachedBytes =
+                assets.reference(owner, Objects.toString(metadata.get("image"), ""));
+            metadata.put("cached", true);
+            metadata.put("usage", Map.of());
+            metadata.put("estimatedCostUsd", java.math.BigDecimal.ZERO);
+            metadata.put("costStatus", "LOCAL_CACHE_NO_PROVIDER_CALL");
+            apply(work, id, owner, metadata, cachedBytes);
+            return;
+          } catch (java.io.IOException
+              | org.springframework.web.server.ResponseStatusException unavailable) {
+          }
+        }
+      }
+      if (selectedProvider.equals("OPENAI")) {
+        spend.reserve(id, owner, provider.model());
+        spend.dispatched(id);
+      }
+      var generated = provider.generateWithMetadata(prompt, reference);
+      if (selectedProvider.equals("OPENAI")) spend.complete(id, generated.metadata());
+      var metadata = new LinkedHashMap<String, Object>(generated.metadata());
+      metadata.put("provider", selectedProvider);
+      metadata.put("model", provider.model());
+      metadata.put("cached", false);
+      apply(work, id, owner, metadata, generated.bytes());
+    } catch (Exception e) {
+      spend.unknown(id);
+      String message =
+          e instanceof OpenAiImages.ImageApiException || e instanceof IllegalArgumentException
+              ? e.getMessage()
+              : "Generation unavailable or image validation failed. Saved versions are preserved."
+                  + " Retry is explicit and limited; an interrupted request may already be"
+                  + " billed.";
+      store
+          .jdbc()
+          .update(
+              "UPDATE studio_jobs SET state='FAILED',error=?,updated_at=now() WHERE id=? AND"
+                  + " state='RUNNING'",
+              message.substring(0, Math.min(240, message.length())),
+              id);
+    }
+  }
+
+  private void apply(
+      Map<String, Object> work,
+      UUID id,
+      String owner,
+      Map<String, Object> metadata,
+      byte[] generated) {
+    tx.executeWithoutResult(
+        status -> {
+          var current =
+              store
+                  .jdbc()
+                  .query(
+                      "SELECT state FROM studio_jobs WHERE id=? FOR UPDATE",
+                      (r, n) -> r.getString(1),
+                      id);
+          if (current.isEmpty() || !current.getFirst().equals("RUNNING")) return;
+          String image = Objects.toString(metadata.get("image"), "");
+          if (generated != null)
             try {
               image = assets.save(owner, generated);
             } catch (Exception e) {
               throw new IllegalArgumentException("Image failed file validation.");
             }
-            var metadata =
-                Map.of(
-                    "image",
-                    image,
-                    "provider",
-                    "GEMINI",
-                    "model",
-                    provider.model(),
-                    "quality",
-                    "File validation passed; semantic and aesthetic human review required");
-            if (work.get("operation").equals("GARMENT")) {
-              var revision = store.revision((UUID) work.get("revision"));
-              var data = (tools.jackson.databind.node.ObjectNode) revision.data().deepCopy();
-              data.put("image", image);
-              data.put("state", "READY");
-              data.put("provider", "GEMINI");
-              data.put("model", provider.model());
-              data.put("quality", metadata.get("quality"));
-              store
-                  .jdbc()
-                  .update(
-                      "UPDATE studio_revisions SET payload=?::jsonb WHERE id=?",
-                      store.encode(data),
-                      revision.id());
-            }
+          metadata.put("image", image);
+          metadata.put(
+              "quality", "File validation passed; semantic and aesthetic human review required");
+          if (work.get("operation").equals("GARMENT")) {
+            var revision = store.revision((UUID) work.get("revision"));
+            var data = (tools.jackson.databind.node.ObjectNode) revision.data().deepCopy();
+            data.put("image", image);
+            data.put("state", "READY");
+            data.put("provider", Objects.toString(metadata.get("provider"), ""));
+            data.put("model", Objects.toString(metadata.get("model"), ""));
+            data.put("quality", Objects.toString(metadata.get("quality"), ""));
             store
                 .jdbc()
                 .update(
-                    "UPDATE studio_jobs SET state='SUCCEEDED',result=?::jsonb,updated_at=now()"
-                        + " WHERE id=?",
-                    store.encode(metadata),
-                    id);
-          });
-    } catch (Exception e) {
-      store
-          .jdbc()
-          .update(
-              "UPDATE studio_jobs SET state='FAILED',error='Generation unavailable or image"
-                  + " validation failed. Saved versions are preserved. You may retry within the"
-                  + " daily limit.',updated_at=now() WHERE id=? AND state='RUNNING'",
-              id);
+                    "UPDATE studio_revisions SET payload=?::jsonb WHERE id=?",
+                    store.encode(data),
+                    revision.id());
+          }
+          store
+              .jdbc()
+              .update(
+                  "UPDATE studio_jobs SET state='SUCCEEDED',result=?::jsonb,updated_at=now()"
+                      + " WHERE id=?",
+                  store.encode(metadata),
+                  id);
+        });
+  }
+
+  private static String fingerprint(String owner, String settings, String prompt, byte[] reference)
+      throws Exception {
+    var digest = java.security.MessageDigest.getInstance("SHA-256");
+    for (String field : List.of(owner, settings, prompt)) {
+      byte[] bytes = field.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+      digest.update(java.nio.ByteBuffer.allocate(4).putInt(bytes.length).array());
+      digest.update(bytes);
     }
+    if (reference != null) digest.update(reference);
+    return java.util.HexFormat.of().formatHex(digest.digest());
   }
 }

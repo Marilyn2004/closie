@@ -2,7 +2,7 @@
 
 Closie helps translate an everyday fashion idea into clothing concepts and outfits, initially focused on **California Campus / Playful Feminine Casual**. The current direction is [V1.1](docs/CLOSIE_V1_1_SPEC.md): **Discover → Find → Style**, including one unified **Style My Item** journey.
 
-**Current boundary:** the local concept studio works with six original, pre-generated garment assets, structured rules, persistent design/version history and a shared outfit engine. Gemini image generation, optional photo analysis and OpenAI brief enhancement have server-side adapters, but **live account access and model quality have not been verified**. No paid application model calls were made. New designs without generated images are labeled **Design brief**. Do not present this release as a verified live AI stylist or a shopping service.
+**Current boundary:** the local concept studio works with six original, pre-generated garment assets, structured rules, persistent design/version history and a shared outfit engine. OpenAI image generation was verified with exactly one live request on 2026-10-28 (reported usage estimate **$0.00684**). Image edits and doll previews pass local transport/pipeline tests but have not received additional paid live verification. Gemini and optional photo/brief enhancement remain available but live-unverified. New designs without generated images are labeled **Design brief**. One successful clothing image does not establish overall AI styling quality or shopping availability.
 
 The existing retail catalog, eBay adapter and deletion-notification logic remain in place. Existing retail data is preserved. This branch has not been publicly deployed and does not change the existing Railway site.
 
@@ -60,24 +60,39 @@ Shared outfit engine                         durable StudioJobs
        ↓                                             ↓
 Concept / OwnedItem references                ImageGenerationProvider
        ↓                                             ↓
-PostgreSQL JSONB + append-only versions           GeminiImages
+PostgreSQL JSONB + append-only versions           OpenAiImages / GeminiImages
        ↓                                             ↓
 Private file store ← file validation + metadata removal
 ```
 
 Distinct types: **FashionConcept** has no commerce facts; **OwnedItem** separates user-confirmed attributes from source/match evidence; existing **RetailProduct** facts stay in the authorized catalog boundary. No generated brand, price, stock or buying URL is added to concepts.
 
-V1–V5 retain the catalog/import/deletion schema. Additive **V6** adds studio documents (concept/owned/outfit/profile), append-only revision records with parent references, private asset references, durable generation jobs and a model-usage ledger. **V7** adds a stable append sequence, backfilling old revisions without changing IDs or parent links; timestamps alone cannot order multiple appends in one transaction. Java DTOs validate JSONB documents. Retail entity mapping and records are unchanged.
+V1–V5 retain the catalog/import/deletion schema. Additive **V6** adds studio documents (concept/owned/outfit/profile), append-only revision records with parent references, private asset references, durable generation jobs and a model-usage ledger. **V7** adds a stable append sequence, backfilling old revisions without changing IDs or parent links; timestamps alone cannot order multiple appends in one transaction. Java DTOs validate JSONB documents. **V8** adds owner-scoped image request fingerprints and durable OpenAI spend reservations that do not cascade when jobs/items are deleted. Retail entity mapping and records are unchanged.
 
 Private generated/uploaded files live in `.local/studio-assets` by default, with database references. Anonymous 256-bit browser tokens are stored locally and hashed server-side for ownership checks; they are never query-string asset credentials. Private images require the session header and are displayed as browser blob URLs. Curated originals are intentionally public project assets. This is browser-scoped persistence, not an account/login or cross-device sync system. Losing browser storage loses access to that anonymous studio; back up both its capability and private data appropriately.
 
 PNG/JPEG uploads are limited to 8 MB and 16 megapixels, checked before full raster decode, resized to at most 1600 pixels and re-encoded without original metadata. Item/photo deletion controls and unattached-photo cleanup are available. Local file storage needs a persistent volume/object-store adapter before a cloud release.
 
+## OpenAI image integration
+
+See [OPENAI_IMAGES.md](docs/OPENAI_IMAGES.md) for the verified model, usage/cost evidence, the $3 lifetime reservation guard and backend-only key setup. Existing OpenAI API project credentials are reused; no project is created.
+
+After exporting `OPENAI_API_KEY` privately in the terminal, `./dev openai` enables the local image provider with a **one-paid-request verification limit** and disables other paid AI paths. The only live verification has already consumed that limit. It does not generate anything on startup.
+
+To use the remaining Closie allocation interactively, stop the local app and explicitly start in that same terminal:
+
+```sh
+CLOSIE_OPENAI_MAX_PAID_REQUESTS=12 ./dev openai
+```
+
+This raises the lifetime request limit to twelve, including the completed verification. Each call permanently reserves $0.25, limiting Closie image allocations to $3. Actual token-derived costs are reported separately and are usually lower. No further live verification calls are needed. Other apps using the same API project are outside this local ledger.
+
 ## Providers and safeguards
 
 Configuration is backend-only; never put keys in Vite variables or Git. See `.env.example`.
 
-- `CLOSIE_GENERATION_ENABLED=false`, `GEMINI_API_KEY`, `GEMINI_IMAGE_MODEL`: explicitly opt in to garment/doll generation. Model name is **unset by default**; use an image-capable model available to the account, verified through Google's model API before each generation. The configured adapter uses the documented GenerateContent image interface; alternative providers implement `ImageGenerationProvider`.
+- `CLOSIE_IMAGE_PROVIDER=openai`, `OPENAI_API_KEY`, `OPENAI_IMAGE_MODEL=gpt-image-2.5-flare-2026-09-08`: default image provider. The direct Images API uses one low-quality 1024-square JPEG, an explicit model snapshot, bounded payload/time limits and no automatic retry. The image key is only a backend environment variable; the frontend process does not inherit provider keys.
+- `CLOSIE_IMAGE_PROVIDER=gemini`, `CLOSIE_GENERATION_ENABLED=false`, `GEMINI_API_KEY`, `GEMINI_IMAGE_MODEL`: explicitly opt in to garment/doll generation. Model name is **unset by default**; use an image-capable model available to the account, verified through Google's model API before each generation. The configured adapter uses the documented GenerateContent image interface; alternative providers implement `ImageGenerationProvider`.
 - `CLOSIE_GENERATION_DAILY_LIMIT=12`: global rolling 24-hour job cap; at most six jobs per browser in that period. Existing queued/running/successful requests for a revision/operation are deduplicated. Cancelled/failed attempts still consume reservations. One durable claim at a time per worker; model requests have deadlines and bounded response sizes.
 - Failed or interrupted requests are **not automatically replayed**, because they may already have been billed. Retry is explicit, budgeted and preserves the original. A cancellation discards subsequent results; it cannot guarantee upstream billing cancellation.
 - `CLOSIE_AI_ENABLED`, `OPENAI_API_KEY`, `OPENAI_MODEL`, plus **`CLOSIE_TEXT_DAILY_LIMIT=0`**: optional structured design-brief interpretation. A positive limit is an additional explicit budget opt-in. Output is validated; errors/limits fall back to curated rules.
@@ -103,6 +118,8 @@ Studio routes exist only when the studio feature is enabled. Private routes requ
 - `POST /api/studio/uploads` (multipart), `GET /uploads`, `GET/DELETE /assets/{id}`
 - `POST /api/studio/owned/identify`, `/owned/{id}/confirm`
 - `POST /api/studio/outfits`, `/outfits/{id}/replace`, `/outfits/{id}/doll`
+- `POST /api/studio/items/{id}/quote`: pre-call text-only generation estimate; reference edits are explicitly not assigned that estimate.
+- `GET /api/studio/budget`: lifetime image allocations, reported usage estimates and request limits, without credentials.
 - `GET /api/studio/jobs`, `/jobs/{id}`; `POST /jobs/{id}/cancel`
 - `DELETE /api/studio/items/{id}`
 
@@ -131,4 +148,4 @@ Original pre-generated concept capsule; not retailer inventory or proof of live 
 
 ## Release limitations
 
-This is a locally reviewable concept-studio MVP foundation. Verified live image/vision/brief generation and human aesthetic acceptance remain required before claiming the complete AI MVP. Broader capsule coverage, richer constraint/ranking logic, permitted multi-retailer lookup, cloud-persistent asset storage, authenticated accounts and public abuse protection remain future work. Do not deploy this local anonymous workspace as a public multi-user product without those changes and explicit approval.
+This is a locally reviewable concept-studio MVP foundation. One OpenAI clothing generation is live-verified; image-edit/doll quality, vision/brief generation and human aesthetic acceptance remain required before claiming the complete AI MVP. Broader capsule coverage, richer constraint/ranking logic, permitted multi-retailer lookup, cloud-persistent asset storage, authenticated accounts and public abuse protection remain future work. Do not deploy this local anonymous workspace as a public multi-user product without those changes and explicit approval.

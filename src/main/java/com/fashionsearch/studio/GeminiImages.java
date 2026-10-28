@@ -13,6 +13,10 @@ import tools.jackson.databind.json.JsonMapper;
 /** Fixed vendor origin; model must be selected by the operator, never by client input. */
 @Component
 @ConditionalOnProperty(name = "closie.studio.enabled", havingValue = "true")
+@ConditionalOnProperty(
+    name = "closie.studio.image-provider",
+    havingValue = "gemini",
+    matchIfMissing = true)
 public class GeminiImages implements ImageGenerationProvider {
   private final String key, model;
   private final boolean enabled;

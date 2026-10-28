@@ -231,7 +231,10 @@ export default function StudioApp() {
         (doll ? "/outfits/" : "/items/") +
           d.id +
           (doll ? "/doll" : "/generate"),
-        { revisionId: rid },
+        {
+          revisionId: rid,
+          regenerate: !doll && chosen?.data.state === "READY",
+        },
       );
       setJobs((old) => [j, ...old.filter((x) => x.id !== j.id)]);
       setNotice(

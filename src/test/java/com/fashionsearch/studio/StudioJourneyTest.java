@@ -217,7 +217,8 @@ class StudioJourneyTest {
         .isInstanceOf(IllegalArgumentException.class);
     when(provider.configured()).thenReturn(true);
     when(provider.model()).thenReturn("test-only-mock");
-    when(provider.generate(anyString(), any())).thenReturn(png());
+    when(provider.generateWithMetadata(anyString(), any()))
+        .thenReturn(new ImageGenerationProvider.GeneratedImage(png(), Map.of()));
     var job = jobs.enqueue(owner, d.id(), r.id(), false);
     assertThat(jobs.enqueue(owner, d.id(), r.id(), false).id()).isEqualTo(job.id());
     jobs.tick();
@@ -235,7 +236,7 @@ class StudioJourneyTest {
     jobs.cancel(owner, job.id());
     jobs.tick();
     assertThat(jobs.get(owner, job.id()).state()).isEqualTo("CANCELLED");
-    when(provider.generate(anyString(), any()))
+    when(provider.generateWithMetadata(anyString(), any()))
         .thenThrow(new IOException("secret provider detail"));
     var retry = jobs.enqueue(owner, d.id(), r.id(), false);
     jobs.tick();

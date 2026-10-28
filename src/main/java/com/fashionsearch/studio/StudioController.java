@@ -40,7 +40,7 @@ public class StudioController {
         "imageConfigured",
         provider.configured(),
         "provider",
-        "GEMINI",
+        Objects.toString(provider.name(), "GEMINI"),
         "model",
         Objects.toString(provider.model(), ""),
         "interpretation",
@@ -78,7 +78,7 @@ public class StudioController {
     return studio.find(StudioService.owner(session), request);
   }
 
-  public record RevisionRequest(UUID revisionId) {}
+  public record RevisionRequest(UUID revisionId, Boolean regenerate) {}
 
   @PostMapping("/items/{id}/revert")
   public Object revert(
@@ -131,12 +131,56 @@ public class StudioController {
     return studio.replace(StudioService.owner(session), id, request);
   }
 
+  @PostMapping("/items/{id}/quote")
+  public Object quote(
+      @RequestHeader("X-Studio-Session") String session,
+      @PathVariable UUID id,
+      @RequestBody RevisionRequest request) {
+    var d = store.get(StudioService.owner(session), id);
+    if (!d.kind().equals("CONCEPT"))
+      throw new IllegalArgumentException("Select a fashion concept.");
+    var revision = studio.selected(d, request.revisionId());
+    String prompt = StyleLibrary.prompt(studio.brief(revision));
+    boolean reference =
+        !revision
+            .data()
+            .path("referenceImage")
+            .asText(revision.data().path("image").asText(""))
+            .isBlank();
+    return Map.of(
+        "provider",
+        Objects.toString(provider.name(), "GEMINI"),
+        "model",
+        Objects.toString(provider.model(), ""),
+        "quality",
+        "low",
+        "size",
+        "1024x1024",
+        "promptUtf8Bytes",
+        prompt.getBytes(java.nio.charset.StandardCharsets.UTF_8).length,
+        "inputImageCount",
+        reference ? 1 : 0,
+        "estimateAvailable",
+        !reference && "OPENAI".equals(provider.name()),
+        "estimatedUsd",
+        reference
+            ? "UNAVAILABLE_FOR_REFERENCE_EDIT"
+            : OpenAiImageCost.generationEstimate(prompt).toPlainString(),
+        "reservationUsd",
+        OpenAiImageCost.RESERVATION);
+  }
+
   @PostMapping("/items/{id}/generate")
   public Object generate(
       @RequestHeader("X-Studio-Session") String session,
       @PathVariable UUID id,
       @RequestBody RevisionRequest request) {
-    return jobs.enqueue(StudioService.owner(session), id, request.revisionId(), false);
+    return jobs.enqueue(
+        StudioService.owner(session),
+        id,
+        request.revisionId(),
+        false,
+        Boolean.TRUE.equals(request.regenerate()));
   }
 
   @PostMapping("/outfits/{id}/doll")
@@ -144,7 +188,18 @@ public class StudioController {
       @RequestHeader("X-Studio-Session") String session,
       @PathVariable UUID id,
       @RequestBody RevisionRequest request) {
-    return jobs.enqueue(StudioService.owner(session), id, request.revisionId(), true);
+    return jobs.enqueue(
+        StudioService.owner(session),
+        id,
+        request.revisionId(),
+        true,
+        Boolean.TRUE.equals(request.regenerate()));
+  }
+
+  @GetMapping("/budget")
+  public Object budget(@RequestHeader("X-Studio-Session") String session) {
+    StudioService.owner(session);
+    return jobs.budgetSummary();
   }
 
   @GetMapping("/jobs")

@@ -3,6 +3,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 MODE="${1:-studio}"
+OPENAI_VERIFY=false
+if [[ "$MODE" == "openai" ]]; then OPENAI_VERIFY=true; MODE=studio; fi
 STATE="$ROOT/.local"
 mkdir -p "$STATE"
 if [[ "$MODE" == "stop" ]]; then
@@ -18,12 +20,22 @@ if [[ "$MODE" == "stop" ]]; then
   echo "Closie application processes stopped. Database and data are preserved."
   exit 0
 fi
-if [[ "$MODE" != "demo" && "$MODE" != "live" && "$MODE" != "studio" ]]; then echo "Usage: ./dev [studio|demo|live|stop]"; exit 1; fi
+if [[ "$MODE" != "demo" && "$MODE" != "live" && "$MODE" != "studio" ]]; then echo "Usage: ./dev [studio|openai|demo|live|stop]"; exit 1; fi
 if [[ -f .env.local ]]; then
   set -a
   source .env.local
   set +a
 fi
+if [[ "$OPENAI_VERIFY" == true ]]; then
+  [[ -n "${OPENAI_API_KEY:-}" ]] || { echo "Set OPENAI_API_KEY in this terminal first. Never paste it into a command or chat."; exit 1; }
+  export CLOSIE_IMAGE_PROVIDER=openai CLOSIE_GENERATION_ENABLED=true
+  export CLOSIE_OPENAI_MAX_PAID_REQUESTS="${CLOSIE_OPENAI_MAX_PAID_REQUESTS:-1}"
+  export CLOSIE_AI_ENABLED=false CLOSIE_TEXT_DAILY_LIMIT=0 CLOSIE_VISION_ENABLED=false
+fi
+# Use the already installed desktop runtime when this terminal has no Node/pnpm on PATH.
+RUNTIME_BASE="$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies"
+if ! command -v node >/dev/null 2>&1 && [[ -x "$RUNTIME_BASE/node/bin/node" ]]; then export PATH="$RUNTIME_BASE/node/bin:$PATH"; fi
+if ! command -v pnpm >/dev/null 2>&1 && [[ -x "$RUNTIME_BASE/bin/fallback/pnpm" ]]; then export PATH="$RUNTIME_BASE/bin/fallback:$PATH"; fi
 if [[ -z "${JAVA_HOME:-}" ]] && command -v /usr/libexec/java_home >/dev/null 2>&1; then
   export JAVA_HOME="$(/usr/libexec/java_home -v 21 2>/dev/null || true)"
 fi
@@ -65,7 +77,7 @@ else
   export CLOSIE_DEMO_ENABLED=false
 fi
 export DB_USERNAME=fashion DB_PASSWORD=fashion
-if [[ ! -d frontend/node_modules ]]; then (cd frontend && pnpm install --frozen-lockfile); fi
+if [[ ! -d frontend/node_modules ]]; then (cd frontend && env -u OPENAI_API_KEY -u GEMINI_API_KEY pnpm install --frozen-lockfile); fi
 # Compile first; direct Java execution gives the launcher a PID it can safely manage.
 ./mvnw -q -DskipTests compile dependency:build-classpath -Dmdep.outputFile=.local/classpath
 CLASSPATH="$ROOT/target/classes:$(cat "$STATE/classpath")"
@@ -84,7 +96,7 @@ for ((i=0;i<45;i++)); do
   sleep 1
 done
 curl -fsS http://127.0.0.1:8080/api/status >/dev/null || { echo "Backend startup timed out. See .local/backend.log"; exit 1; }
-nohup node "$ROOT/frontend/node_modules/vite/bin/vite.js" "$ROOT/frontend" --host 127.0.0.1 --port 5173 > "$STATE/frontend.log" 2>&1 &
+nohup env -u OPENAI_API_KEY -u GEMINI_API_KEY node "$ROOT/frontend/node_modules/vite/bin/vite.js" "$ROOT/frontend" --host 127.0.0.1 --port 5173 > "$STATE/frontend.log" 2>&1 &
 FRONTEND_PID="$!"
 echo "$FRONTEND_PID" > "$STATE/frontend.pid"
 for ((i=0;i<20;i++)); do if curl -fsS http://127.0.0.1:5173 >/dev/null 2>&1; then break; fi; sleep 1; done
