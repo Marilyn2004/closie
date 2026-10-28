@@ -78,6 +78,21 @@ class EbayResilienceTest {
   }
 
   @Test
+  void mapsProviderSellerForDeletionWithoutGuessing() {
+    token("test");
+    server
+        .expect(requestTo(org.hamcrest.Matchers.containsString("item_summary/search")))
+        .andRespond(
+            withSuccess(
+                "{\"itemSummaries\":[{\"itemId\":\"v1|owned|0\",\"title\":\"Cotton"
+                    + " Top\",\"price\":{\"value\":\"20\",\"currency\":\"USD\"},\"seller\":{\"username\":\"opaque-seller-id\"}}]}",
+                MediaType.APPLICATION_JSON));
+    assertThat(client.search("top", 0).products().getFirst().sellerUsername())
+        .isEqualTo("opaque-seller-id");
+    server.verify();
+  }
+
+  @Test
   void enrichmentUsesOnlyProviderSuppliedAspects() {
     token("test");
     server

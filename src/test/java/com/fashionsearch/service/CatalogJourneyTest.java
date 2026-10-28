@@ -270,6 +270,26 @@ class CatalogJourneyTest {
   }
 
   @Test
+  void canonicalCategoryNeverMatchesAnUnrelatedTitleWord() {
+    product("Top handle handbag", "BAG", "20", "USD", "black", "Test", "casual");
+    product("Low top sneakers", "SHOES", "20", "USD", "white", "Test", "casual");
+    product("Soft bottom walking shoes", "SHOES", "20", "USD", "white", "Test", "casual");
+    var tops =
+        catalog.discover(
+            new SearchContext("", "TOP", null, null, null, null, "USD", null, null),
+            0,
+            "relevance");
+    assertThat(tops.products()).hasSize(2).allMatch(p -> "TOP".equals(p.outfitSlot()));
+    assertThat(tops.products()).extracting(ProductView::id).contains(top.getId());
+    var bottoms =
+        catalog.discover(
+            new SearchContext("", "BOTTOM", null, null, null, null, "USD", null, null),
+            0,
+            "relevance");
+    assertThat(bottoms.products()).extracting(ProductView::id).containsExactly(bottom.getId());
+  }
+
+  @Test
   void browserJourneyAgainstRealBackend() throws Exception {
     Assumptions.assumeTrue(
         "true".equals(System.getenv("CLOSIE_BROWSER_SMOKE")),

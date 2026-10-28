@@ -32,6 +32,36 @@ public class CatalogService {
     this.demoEnabled = enabled;
   }
 
+  /**
+   * A bounded, deterministic discovery edit; explicit price/recent sorts remain ordinary search.
+   */
+  public Results discover(SearchContext c, int page, String sort) {
+    if (sort != null && !sort.equals("relevance")) return search(c, page, sort);
+    if (page < 0 || page > 1000) throw new IllegalArgumentException("Invalid page.");
+    var eligible = repository.findAll(spec(c, true), PageRequest.of(0, 1000));
+    var buckets = new LinkedHashMap<String, ArrayDeque<ProductView>>();
+    for (var product : eligible.getContent()) {
+      var view = ProductView.of(product);
+      buckets
+          .computeIfAbsent(
+              Objects.toString(view.outfitSlot(), "OTHER"), ignored -> new ArrayDeque<>())
+          .add(view);
+    }
+    var mixed = new ArrayList<ProductView>();
+    boolean remaining;
+    do {
+      remaining = false;
+      for (var bucket : buckets.values())
+        if (!bucket.isEmpty()) {
+          mixed.add(bucket.remove());
+          remaining = true;
+        }
+    } while (remaining);
+    int start = Math.min(mixed.size(), page * 24), end = Math.min(mixed.size(), start + 24);
+    return new Results(
+        List.copyOf(mixed.subList(start, end)), mixed.size(), page, end < mixed.size());
+  }
+
   public Results search(SearchContext c, int page) {
     return search(c, page, "relevance");
   }
@@ -112,12 +142,14 @@ public class CatalogService {
         predicates.add(b.equal(b.lower(root.get("brand")), c.brand().toLowerCase(Locale.ROOT)));
       if (text(c.color()))
         predicates.add(b.equal(b.lower(root.get("color")), c.color().toLowerCase(Locale.ROOT)));
-      if (text(c.category()))
-        predicates.add(
-            b.or(
-                like(b, root, "category", c.category()),
-                like(b, root, "title", c.category()),
-                b.equal(root.get("outfitSlot"), c.category().toUpperCase(Locale.ROOT))));
+      if (text(c.category())) {
+        String slot = c.category().toUpperCase(Locale.ROOT);
+        if (Set.of("TOP", "BOTTOM", "ONE_PIECE", "SHOES", "OUTERWEAR", "BAG", "ACCESSORY")
+            .contains(slot)) predicates.add(b.equal(root.get("outfitSlot"), slot));
+        else
+          predicates.add(
+              b.or(like(b, root, "category", c.category()), like(b, root, "title", c.category())));
+      }
       if (keywords && text(c.keywords()))
         for (String token : c.keywords().split("\\s+")) {
           if (!token.isBlank())

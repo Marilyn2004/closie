@@ -15,7 +15,37 @@ public record EbayProduct(
     String brand,
     String color,
     List<String> sizes,
-    String availability) {
+    String availability,
+    String sellerUsername) {
+  public EbayProduct(
+      String itemId,
+      String title,
+      String shortDescription,
+      String categoryName,
+      BigDecimal price,
+      String currency,
+      String imageUrl,
+      String itemWebUrl,
+      String brand,
+      String color,
+      List<String> sizes,
+      String availability) {
+    this(
+        itemId,
+        title,
+        shortDescription,
+        categoryName,
+        price,
+        currency,
+        imageUrl,
+        itemWebUrl,
+        brand,
+        color,
+        sizes,
+        availability,
+        null);
+  }
+
   public EbayProduct(
       String itemId,
       String title,

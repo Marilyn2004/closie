@@ -67,10 +67,20 @@ public class ProductIngestionService {
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   private org.springframework.jdbc.core.JdbcTemplate importHistory;
 
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.fashionsearch.notification.EbayAccountPolicy accounts;
+
   public ImportResult importFashionProducts() {
     if (!importLock.tryLock()) throw new ImportBusyException();
     Long runId = null;
     try {
+      if (importHistory != null
+          && Boolean.TRUE.equals(
+              importHistory.queryForObject(
+                  "SELECT imports_paused FROM ebay_catalog_control WHERE id=1", Boolean.class)))
+        throw new IllegalStateException(
+            "eBay imports are paused after an account deletion notification; operator review"
+                + " required");
       if (importHistory != null)
         runId =
             importHistory.queryForObject(
@@ -143,6 +153,18 @@ public class ProductIngestionService {
 
   private ImportResult persist(
       String source, List<com.fashionsearch.catalog.SourceProduct> ebayProducts) {
+    if (EBAY_SOURCE.equals(source) && importHistory != null) {
+      Boolean paused =
+          importHistory.queryForObject(
+              "SELECT imports_paused FROM ebay_catalog_control WHERE id=1 FOR UPDATE",
+              Boolean.class);
+      if (Boolean.TRUE.equals(paused))
+        throw new IllegalStateException(
+            "eBay imports are paused after an account deletion notification; operator review"
+                + " required");
+    }
+    if (EBAY_SOURCE.equals(source) && accounts != null && accounts.enabled())
+      accounts.lockAndValidateKey();
     int created = 0;
     int updated = 0;
     int skipped = 0;
@@ -156,6 +178,13 @@ public class ProductIngestionService {
       Optional<Product> existing =
           productRepository.findBySourceAndExternalId(source, incoming.getExternalId());
       incoming.setSource(source);
+      if (EBAY_SOURCE.equals(source)
+          && accounts != null
+          && accounts.enabled()
+          && !accounts.allow(incoming, item.ownerIdentifier())) {
+        skipped++;
+        continue;
+      }
       normalizer.enrich(incoming, item);
       incoming.setLastSeenAt(java.time.Instant.now());
       if (existing.isEmpty()) {
@@ -164,6 +193,17 @@ public class ProductIngestionService {
         continue;
       }
       Product current = existing.get();
+      boolean metadataChanged =
+          !Objects.equals(current.getEbayOwnerHash(), incoming.getEbayOwnerHash())
+              || !Objects.equals(current.getOutfitSlot(), incoming.getOutfitSlot())
+              || !Objects.equals(current.getRetailer(), incoming.getRetailer())
+              || !Objects.equals(current.getBrand(), incoming.getBrand())
+              || !Objects.equals(current.getColor(), incoming.getColor())
+              || !Objects.equals(current.getAvailableSizes(), incoming.getAvailableSizes())
+              || !Objects.equals(current.getAvailability(), incoming.getAvailability())
+              || !Objects.equals(current.getStyleTags(), incoming.getStyleTags())
+              || !Objects.equals(current.getOccasionTags(), incoming.getOccasionTags());
+      current.setEbayOwnerHash(incoming.getEbayOwnerHash());
       current.setLastSeenAt(incoming.getLastSeenAt());
       current.setOutfitSlot(incoming.getOutfitSlot());
       current.setRetailer(incoming.getRetailer());
@@ -173,7 +213,7 @@ public class ProductIngestionService {
       current.setAvailability(incoming.getAvailability());
       current.setStyleTags(incoming.getStyleTags());
       current.setOccasionTags(incoming.getOccasionTags());
-      if (applyChanges(current, incoming)) {
+      if (applyChanges(current, incoming) || metadataChanged) {
         productRepository.saveAndFlush(current);
         updated++;
       }

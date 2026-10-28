@@ -136,8 +136,7 @@ public class OutfitService {
                 .filter(slot -> selected.stream().noneMatch(p -> slot.equals(p.outfitSlot())))
                 .toList();
         int value =
-            (absent.isEmpty() ? 100000 : 0)
-                + (template.size() - absent.size()) * 1000
+            (absent.isEmpty() ? 100000 : (template.size() - absent.size()) * 1000)
                 + compatibility(selected, c);
         if (!found || value > merit) {
           found = true;
@@ -318,13 +317,36 @@ public class OutfitService {
     for (String term : Arrays.asList(c.aesthetic(), c.occasion(), c.vibe(), c.mood()))
       if (term != null && !term.isBlank() && text.contains(term.toLowerCase(Locale.ROOT)))
         result += 12;
+    String occasion = Objects.toString(c.occasion(), "").toLowerCase(Locale.ROOT);
+    // Styling heuristics use actual title/category facts; they never invent brand, size or stock.
+    String facts = (p.title() + " " + Objects.toString(p.category(), "")).toLowerCase(Locale.ROOT);
+    if (occasion.contains("dinner")) {
+      if ("ONE_PIECE".equals(p.outfitSlot())) result += 20;
+      if (facts.matches(".*\\b(satin|silk|tailored|cocktail|evening|slip|midi)\\b.*")) result += 16;
+      if (facts.matches(".*\\b(loafers?|flats|heels?|pumps|blouse)\\b.*")) result += 14;
+      if (facts.matches(".*\\b(athletic|sneakers?|trainers?|joggers?|drawstring|hoodie|gym)\\b.*"))
+        result -= 30;
+    } else if (occasion.contains("coffee") || occasion.contains("college")) {
+      if (facts.matches(".*\\b(cardigan|knit|cotton|denim|jeans|loafers?|flats|sneakers?)\\b.*"))
+        result += 12;
+      if (facts.matches(".*\\b(cocktail|evening|stiletto)\\b.*")) result -= 12;
+    } else if (occasion.contains("work")) {
+      if (facts.matches(".*\\b(tailored|trousers?|blouse|loafers?|blazer)\\b.*")) result += 14;
+      if (facts.matches(".*\\b(athletic|joggers?|hoodie|gym)\\b.*")) result -= 20;
+    }
+    String aesthetic = Objects.toString(c.aesthetic(), "").toLowerCase(Locale.ROOT);
+    if ((aesthetic.contains("feminine") || aesthetic.contains("romantic"))
+        && facts.matches(".*\\b(floral|lace|ruffle|satin|silk|dress|skirt)\\b.*")) result += 10;
+    if (aesthetic.contains("minimal")
+        && p.color() != null
+        && NEUTRALS.contains(p.color().toLowerCase(Locale.ROOT))) result += 5;
     return result;
   }
 
   private String explain(List<ProductView> items, SearchContext c, List<String> missing) {
     if (items.isEmpty())
       return "There are no eligible pieces within these preferences. Try a broader palette, another"
-                 + " currency, or a larger item budget.";
+          + " currency, or a larger item budget.";
     String palette =
         items.stream()
             .map(ProductView::color)
@@ -341,7 +363,7 @@ public class OutfitService {
     result +=
         missing.isEmpty()
             ? "The clothing and shoes form a complete base; optional finishing pieces stay inside"
-                  + " your budget."
+                + " your budget."
             : "This is a partial look: still missing "
                 + String.join(", ", missing)
                 + " within your constraints.";

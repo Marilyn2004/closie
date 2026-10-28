@@ -53,6 +53,17 @@ public class Product {
   @Column(nullable = false, length = 50)
   private String source;
 
+  @Column(name = "ebay_owner_hash", length = 64)
+  private String ebayOwnerHash;
+
+  public String getEbayOwnerHash() {
+    return ebayOwnerHash;
+  }
+
+  public void setEbayOwnerHash(String value) {
+    ebayOwnerHash = value;
+  }
+
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;

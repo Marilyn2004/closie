@@ -165,7 +165,8 @@ public class EbayClient {
           brand,
           color,
           size == null ? null : List.of(size),
-          "UNKNOWN");
+          "UNKNOWN",
+          product.sellerUsername());
     } catch (RestClientResponseException failure) {
       if (failure.getStatusCode().value() == 429)
         throw new EbayClientException("eBay detail enrichment rate limited; retry later.");
@@ -187,6 +188,36 @@ public class EbayClient {
   private record Aspect(String name, String value) {}
 
   private record ItemDetails(List<Aspect> localizedAspects, Price price, String itemWebUrl) {}
+
+  public record NotificationPublicKey(String algorithm, String digest, String key) {}
+
+  public synchronized NotificationPublicKey notificationPublicKey(String kid) {
+    if (!kid.matches("[A-Za-z0-9_-]{1,256}"))
+      throw new IllegalArgumentException("Invalid public key identifier");
+    // Notifications use the production key service, never a URL supplied by the caller.
+    if (!"https://api.ebay.com".equals(normalizeBaseUrl(properties.getApiBaseUrl())))
+      throw new EbayClientException(
+          "Production eBay API configuration is required for notifications");
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        return restClient
+            .get()
+            .uri(URI.create("https://api.ebay.com/commerce/notification/v1/public_key/" + kid))
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + currentAccessToken())
+            .retrieve()
+            .body(NotificationPublicKey.class);
+      } catch (RestClientResponseException failure) {
+        if (failure.getStatusCode().value() == 401 && attempt == 0) {
+          clearCachedToken();
+          continue;
+        }
+        throw new EbayClientException("eBay notification key lookup failed");
+      } catch (RestClientException failure) {
+        throw new EbayClientException("eBay notification key lookup failed");
+      }
+    }
+    throw new EbayClientException("eBay notification key lookup failed");
+  }
 
   private synchronized String currentAccessToken() {
     if (accessToken != null && Instant.now().isBefore(tokenExpiresAt)) {
@@ -271,7 +302,12 @@ public class EbayClient {
               parsePrice(summary.price()),
               summary.price() == null ? null : summary.price().currency(),
               summary.image() == null ? null : summary.image().imageUrl(),
-              summary.itemWebUrl()));
+              summary.itemWebUrl(),
+              null,
+              null,
+              null,
+              "UNKNOWN",
+              summary.seller() == null ? null : summary.seller().username()));
     }
     return products;
   }
@@ -348,7 +384,10 @@ public class EbayClient {
       List<String> leafCategoryIds,
       Price price,
       Image image,
-      String itemWebUrl) {}
+      String itemWebUrl,
+      Seller seller) {}
+
+  private record Seller(String username) {}
 
   private record Category(String categoryId, String categoryName) {}
 

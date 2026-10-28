@@ -66,7 +66,7 @@ public class CatalogController {
     SearchContext c =
         new SearchContext("", category, null, null, null, maxPrice, currency, aesthetic, null);
     interpreter.validate(c);
-    return new SearchResponse(c, "rules", catalog.search(c, page, sort));
+    return new SearchResponse(c, "rules", catalog.discover(c, page, sort));
   }
 
   public record SavedRequest(java.util.List<Long> ids) {}

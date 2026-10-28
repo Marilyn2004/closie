@@ -50,6 +50,17 @@ class DemoJourneyTest {
   }
 
   @Test
+  void discoveryMixesSlotsAndKeepsExplicitPriceSort() {
+    var first = catalog.discover(SearchContext.empty(), 0, "relevance");
+    assertThat(first.products()).hasSize(24);
+    assertThat(first.products().stream().map(ProductView::outfitSlot).distinct().count())
+        .isGreaterThanOrEqualTo(6);
+    assertThat(first.products().stream().map(ProductView::id).distinct().count()).isEqualTo(24);
+    assertThat(catalog.discover(SearchContext.empty(), 0, "price_asc").products())
+        .isSortedAccordingTo(java.util.Comparator.comparing(ProductView::price));
+  }
+
+  @Test
   void realisticStylistPromptAndFollowupPreserveBudget() {
     var first =
         outfits.style(

@@ -7,10 +7,19 @@ import org.springframework.stereotype.Component;
 @Component
 public class CatalogNormalizer {
   public static String slot(String title, String category) {
-    String t =
-        ((title == null ? "" : title) + " " + (category == null ? "" : category))
-            .toLowerCase(Locale.ROOT);
+    if (category != null && !category.isBlank()) {
+      String known = textSlot(category.toLowerCase(Locale.ROOT));
+      if (known != null) return known;
+    }
+    return textSlot(
+        (Objects.toString(title, "") + " " + Objects.toString(category, ""))
+            .toLowerCase(Locale.ROOT));
+  }
+
+  private static String textSlot(String t) {
     if (t.matches(".*\\b(bags?|totes?|handbags?|crossbody)\\b.*")) return "BAG";
+    if (t.matches(".*\\bdress\\s+(pants|trousers)\\b.*")) return "BOTTOM";
+    if (t.matches(".*\\bdress\\s+shirts?\\b.*")) return "TOP";
     if (t.matches(".*\\b(dress|dresses|jumpsuit|romper)\\b.*")) return "ONE_PIECE";
     if (t.matches(".*\\b(sneakers?|shoes?|boots?|sandals?|loafers?|heels?|flats)\\b.*"))
       return "SHOES";

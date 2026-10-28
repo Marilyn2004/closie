@@ -49,7 +49,8 @@ public class EbayProductSource implements ProductSource {
                         p.sizes(),
                         p.availability(),
                         null,
-                        null))
+                        null,
+                        p.sellerUsername()))
             .toList(),
         page.hasNext());
   }

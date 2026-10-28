@@ -24,17 +24,7 @@ ebay:
   details-per-page: ${EBAY_DETAILS_PER_PAGE:5}
   request-interval-millis: ${EBAY_REQUEST_INTERVAL_MS:200}
   marketplace-id: ${EBAY_MARKETPLACE_ID:EBAY_US}
-  search-keywords:
-    - leather jacket
-    - cardigan
-    - dress
-    - sneakers
-    - trousers
-    - blouse
-    - necklace
-    - earrings
-    - shoulder bag
-    - tote bag
+  search-keywords: ${EBAY_SEARCH_KEYWORDS:leather jacket,cardigan,dress,sneakers,trousers,blouse,necklace,earrings,shoulder bag,tote bag}
   page-size: ${EBAY_PAGE_SIZE:50}
   max-pages: ${EBAY_MAX_PAGES:2}
 
@@ -42,6 +32,13 @@ import:
   token: ${IMPORT_TOKEN:}
 
 closie:
+  ebay-accounts:
+    enabled: ${EBAY_ACCOUNT_TRACKING_ENABLED:false}
+    hash-key: ${EBAY_ACCOUNT_HASH_KEY:}
+  ebay-notifications:
+    enabled: ${EBAY_NOTIFICATIONS_ENABLED:false}
+    endpoint: ${EBAY_NOTIFICATION_ENDPOINT:}
+    verification-token: ${EBAY_NOTIFICATION_VERIFICATION_TOKEN:}
   demo:
     enabled: ${CLOSIE_DEMO_ENABLED:false}
   refresh:

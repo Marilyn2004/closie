@@ -1,0 +1,21 @@
+# Cloud deployment uses a fresh private database; local demo mode stays local.
+server:
+  address: 0.0.0.0
+  port: ${PORT:8080}
+  tomcat:
+    threads:
+      max: 24
+      min-spare: 2
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
+closie:
+  demo:
+    enabled: false
+  ebay-accounts:
+    enabled: true

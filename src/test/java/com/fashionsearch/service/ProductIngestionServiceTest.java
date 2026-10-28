@@ -121,6 +121,8 @@ class ProductIngestionServiceTest {
   @Test
   void leavesAnUnchangedListingInPlace() {
     stored.put("v1|1|0", existing("v1|1|0", "Black Jacket", new BigDecimal("80.00")));
+    stored.get("v1|1|0").setRetailer("eBay");
+    stored.get("v1|1|0").setOutfitSlot("OUTERWEAR");
     when(ebayClient.search("leather jacket", 0))
         .thenReturn(
             new EbaySearchPage(
@@ -131,6 +133,19 @@ class ProductIngestionServiceTest {
 
     assertThat(result).isEqualTo(new ImportResult(0, 0, 0));
     verify(productRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void countsMetadataOnlyRefreshAsAnUpdate() {
+    stored.put("v1|1|0", existing("v1|1|0", "Black Jacket", new BigDecimal("80.00")));
+    when(ebayClient.search("leather jacket", 0))
+        .thenReturn(
+            new EbaySearchPage(
+                List.of(listing("v1|1|0", "Black Jacket", null, null, "80.00", "USD", null, null)),
+                false));
+    assertThat(service.importFashionProducts()).isEqualTo(new ImportResult(0, 1, 0));
+    assertThat(stored.get("v1|1|0").getOutfitSlot()).isEqualTo("OUTERWEAR");
+    assertThat(stored.get("v1|1|0").getRetailer()).isEqualTo("eBay");
   }
 
   @Test
