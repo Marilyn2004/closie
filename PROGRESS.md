@@ -1,6 +1,6 @@
 # Closie — Demo v1.0 status
 
-Current work: public demo release preparation on `closie-concept-mvp`, starting at verified commit `8143fa9`.
+Current release implementation: `03c3af0` on `closie-concept-mvp`, based on verified commit `8143fa9`. Deployment remains unapproved and has not been performed.
 
 ## Implemented
 
