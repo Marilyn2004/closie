@@ -1,9 +1,11 @@
+> Product vision and private-studio specification. Demo v1.0 deliberately exposes a smaller pre-generated, non-billable subset; see README.md and PUBLIC_DEMO_RELEASE.md for shipped scope.
+
 # Closie — AI Fashion Stylist MVP Specification
 
 **Version:** 1.1 — Consolidated Style My Item
 **Product:** Closie
 **Tagline:** Your Personal AI Stylist
-**Repository:** `/Users/marilyn/Documents/ChatGPT/时尚谷/closie-v2`
+**Repository:** `<repository-root>`
 
 ## 1. Product Vision
 

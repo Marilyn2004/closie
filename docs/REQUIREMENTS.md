@@ -1,3 +1,5 @@
+> Historical 2026-10-26 retail V2 contract. Current shipped Demo v1.0 scope is defined by README.md and PUBLIC_DEMO_RELEASE.md; docs/CLOSIE_V1_1_SPEC.md records the broader private-studio vision. Real shopping, public live generation and uploads are not claimed by this demo.
+
 # Scope and verification contract
 
 The current assignment is “Closie V2 — Build the Complete End-to-End MVP” supplied on 2026-10-26. Earlier Closie direction establishes Discover → Find → Style, real catalog grounding, personal aesthetics and budget awareness. These behaviors are retained.

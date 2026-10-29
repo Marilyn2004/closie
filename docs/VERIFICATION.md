@@ -1,3 +1,5 @@
+> Historical retail verification (2026-10-26/27). For current concept-demo evidence use [PUBLIC_DEMO_RELEASE.md](PUBLIC_DEMO_RELEASE.md) and [PR_PREPARATION.md](PR_PREPARATION.md). Old blanket-purge and deployment statements describe their dated implementation; current seller-aware behavior is in [EBAY_SETUP.md](EBAY_SETUP.md). No current cloud state is asserted.
+
 # Verification — 2026-10-26
 
 Latest implementation was verified locally with Java 21, PostgreSQL 17 Testcontainers, Node 24 and Chromium. These are measured local results, not claims about deployed traffic or external accounts.
@@ -37,3 +39,21 @@ EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, IMPORT_TOKEN, OPENAI_API_KEY and OPENAI_MODE
 Keyword/rule interpretation is bounded, not unrestricted natural-language understanding. Style uses explainable heuristics and bounded candidate combinations. No embeddings, full authentication, checkout, cross-device storage, exhaustive inventory reconciliation or distributed scheduling. Other provider display/processing/retention policies need separate authorization review. Historical live records are preserved; no sample rows are inserted into the live database.
 
 Reproduce using README.md. Browser logs: target/browser-smoke.log and target/demo-browser-smoke.log. Java results: target/surefire-reports. Ordinary Maven tests skip the two opt-in browser launcher methods unless CLOSIE_BROWSER_SMOKE=true.
+
+## eBay notification callback update — 2026-10-27
+
+Final regression: **88 Java tests, zero failures/errors/skips**, including the opt-in launchers for **five passing Playwright browser cases**. Fifteen additional Java cases cover notification configuration, real generated ECC signatures, tampering, key caching/outage pacing, the authenticated fixed-host public-key request and one-time OAuth renewal, exact challenge output, signed HTTP-to-PostgreSQL deletion, idempotent retries, in-flight import suppression, transaction rollback and invalid/oversized/duplicate-key JSON. All database mutation tests use disposable Testcontainers databases.
+
+The token preparation helper was also checked in an isolated temporary directory for owner-only permissions, no token disclosure, stable repeated generation, preservation of existing settings and rejection of invalid callback URLs. The private local verification token has been generated; notification handling remains disabled. No development catalog data was deleted, no live database migration was run, and the existing application processes were left running.
+
+Full test log: `/tmp/closie-notification-final-tests.log`; Java reports: `target/surefire-reports`. A first attempt inside the restricted execution environment could not access Docker/Mockito attachment; the complete suite was rerun successfully with the required local process permissions.
+
+The Caddy configuration is an undeployed template, checked against its official request-body directive documentation but not executed by Caddy. No real eBay notification or activation call was made. A stable public HTTPS host, Production credentials, account-side challenge/test delivery and the documented seller-aware deletion/backup policy remain external/live-commerce blockers. See `docs/EBAY_SETUP.md` before activation.
+
+## Authorized Railway deployment — 2026-10-27
+
+Following explicit deployment authorization, a dedicated Closie app and private PostgreSQL service were created using the existing Railway trial. Both report SUCCESS. Public frontend, empty live catalog, exact callback challenge, unsigned-notification rejection, import-token enforcement, saved resolution, browser search and empty-catalog styling were verified. No eBay account-side activation, production credentials, live product ingestion or real model access was verified. No local data was copied or deleted. See `RAILWAY_DEPLOYMENT.md` for a sanitized historical summary; trial figures and resource IDs are not current deployment instructions.
+
+## Real eBay connection and notification verification — 2026-10-27
+
+Production OAuth: HTTP 200. Production Browse: HTTP 200, five real listings with required display facts and seller identity present. The then-current cloud deployment after the user's runtime credential changes was reported successful. This refers to Railway configuration, not a Git credential commit. User-reported eBay test notification success is corroborated by backend processing logs after actual signature verification, with zero product rows purged and import-pause protection triggered. Direct database receipt querying was unavailable without a registered SSH key; none was added. No live catalog import or model request occurred. Seller-aware deletion/reimport suppression was a blocker at that time; V5 and the current policy now implement it, subject to the operational limits in `EBAY_SETUP.md`. Documentation-only updates followed these checks; no new application code or tests were changed.

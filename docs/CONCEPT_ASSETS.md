@@ -24,3 +24,7 @@ Application-generated images use separate private asset storage, with actual pro
 `blue-cardigan.jpg` is the existing OpenAI verification output from 2026-10-28, copied from the private local verification artifact into the immutable public demo bundle. It is an original baby-blue fitted ribbed cardigan with pearl-like buttons, generated with `gpt-image-2.5-flare-2026-09-08` at low / 1024x1024. See OPENAI_IMAGES.md for the one-request evidence and $0.00684 usage estimate. No new model request was made for public demo preparation.
 
 The public capsule has seven images across tops, bottoms, shoes and bags. Two pre-arranged boards reuse these original item assets; they are not new AI-generated collages. No dresses, outerwear or jewelry were added through mock or retailer imagery. Human aesthetic acceptance remains distinct from the agent's visual inspection.
+
+## Publication boundary
+
+These notes document how the assets were produced; they are not a claim of exclusive copyright, trademark clearance or a license grant. No source/asset distribution LICENSE has been selected by the owner. Retained retail SVGs are application-authored fictional illustrations; the public-demo filter does not expose those retail sample routes. Screenshots are local synthetic demo views, not evidence of real users, merchant partnerships or live inventory. No new images were generated for PR preparation.

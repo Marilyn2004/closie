@@ -81,7 +81,7 @@ cd ..
 CLOSIE_BROWSER_SMOKE=true ./mvnw test
 ```
 
-On macOS/Colima, use `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` and `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock` if needed. `CLOSIE_NODE` can specify Node's absolute path. Testcontainers uses disposable databases, not the existing local or production databases.
+On macOS/Colima, use `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` and `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock` if needed. `CLOSIE_NODE` can specify Node's absolute path; Node must also be on `PATH` because Playwright starts Vite in a child shell. Testcontainers uses disposable databases, not the existing local or production databases.
 
 Public, private-studio and historical retail browser suites have separate configurations. Fake-key/unsafe-flag tests verify public HTTP denials and model-layer guards without contacting a real model. Local packaged-artifact checks verify CSP/static assets, search, saved looks and persistence across restart/recreated app containers.
 
@@ -99,3 +99,11 @@ Pre-generated original concepts; not retailer inventory or new live results.
 Recommended: one Railway Docker web service serving React + Spring, with dedicated durable PostgreSQL; images stay bundled. Neon is an optional managed pgvector-compatible database alternative. Hosting costs, credits and backups need approval before provisioning. No billing changes, public repository publication, branch merge or cloud deployment are part of this preparation.
 
 Remaining limits: a small capsule, rules-based retrieval/styling, no accounts/cross-device sync, no public uploads or shopping availability, and no hosted HTTPS/remote CI verification yet. A source license must be chosen before eventual public source publication. Expansion should improve curated coverage and evaluated quality, not add unverified marketplace imagery or fabricated model claims.
+
+## First PR compatibility notes
+
+This branch includes the retained retail foundation, private concept studio and public Demo v1.0 (not only the final public-profile change). Historical specs/reports are labeled; README and PUBLIC_DEMO_RELEASE.md describe current public behavior. The legacy Railway upload helper is not suitable for this release; follow PUBLIC_DEMO_DEPLOYMENT.md instead.
+
+Compared with the original main branch, local PostgreSQL defaults move from port 5432 to loopback-only 55432; existing installations must review their DB_URL rather than replace/delete a volume. The added retail search APIs return a context/results envelope; they are separate from the public studio APIs. The root Dockerfile defaults to public-demo and requires a dedicated database. This is not a drop-in redeploy of the old retail service. Keep V1 intact and apply subsequent migrations through Flyway.
+
+The GitHub repository is already public. A future branch push will publish its commit history; PR preparation does not push or change visibility. No source LICENSE has been selected. Generated-asset provenance is documented in docs/CONCEPT_ASSETS.md; it does not establish exclusive rights or replace the owner's license decision. Review [PR preparation evidence](docs/PR_PREPARATION.md) before authorizing a push.

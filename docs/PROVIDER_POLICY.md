@@ -1,3 +1,5 @@
+> Historical retail-source review. It is not authorization for current account use or a statement of current provider terms. Public Demo v1.0 displays only original pre-generated concepts; no eBay inventory is exposed. The later activation observations and current seller-deletion implementation are documented in EBAY_SETUP.md.
+
 # Product source review and AI boundary
 
 Reviewed public documentation on 2026-10-24. This is an engineering checklist, not evidence of account-specific authorization. No retailer is integrated merely because its name appears in product strategy.

@@ -1,6 +1,6 @@
 # Closie V1.1 — 本轮交付与验证报告
 
-验证日期：2026-10-27。仓库：`/Users/marilyn/Documents/ChatGPT/时尚谷/closie-v2`。
+验证日期：2026-10-27。仓库：`<repository-root>`。
 
 ## 1. 分支与提交
 
@@ -92,7 +92,7 @@
 ## 9. 本地启动
 
 ```sh
-cd /Users/marilyn/Documents/ChatGPT/时尚谷/closie-v2
+cd <repository-root>
 ./dev studio
 ```
 

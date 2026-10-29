@@ -53,7 +53,7 @@ This local ledger does not control unrelated applications in the same OpenAI pro
 In a terminal, enter the key without recording it in shell history:
 
 ```zsh
-cd "/Users/marilyn/Documents/ChatGPT/时尚谷/closie-v2"
+cd "<repository-root>"
 read -s "OPENAI_API_KEY?Paste API key, then Enter (hidden): "
 export OPENAI_API_KEY
 echo

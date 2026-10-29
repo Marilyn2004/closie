@@ -8,11 +8,11 @@ Closie is a multi-brand-ready fashion discovery and styling application built as
 
 ## eBay production key activation
 
-The optional signed account-deletion callback and activation instructions are in [docs/EBAY_SETUP.md](docs/EBAY_SETUP.md). It is disabled by default. A stable public HTTPS endpoint and account-side verification remain outstanding. Review its conservative cache-purge/import-pause policy before enabling.
+The optional signed account-deletion callback and activation instructions are in [docs/EBAY_SETUP.md](EBAY_SETUP.md). It is disabled by default. A stable public HTTPS endpoint and account-side verification remain outstanding. Review its conservative cache-purge/import-pause policy before enabling.
 
 ## Railway deployment
 
-See [docs/RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md) for the dedicated trial deployment, runtime configuration and verification boundaries. Cloud mode starts with an empty real catalog; local sample mode remains separate.
+See [docs/RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md) for the dedicated trial deployment, runtime configuration and verification boundaries. Cloud mode starts with an empty real catalog; local sample mode remains separate.
 
 ## Start locally
 
@@ -95,7 +95,7 @@ Authenticated / scheduled import → ProductSource → provider API
 
 `ProductSource` and `SourceProduct` are provider-neutral ingestion boundaries. eBay-specific DTOs remain inside its client/adapter. UI and styling consume `ProductView`, not provider responses. Sample illustrations are original SVG assets served by Spring and proxied during frontend development. No image scraping or retailer branding is used.
 
-See [architecture and decisions](docs/ARCHITECTURE.md), [requirements scope](docs/REQUIREMENTS.md) and [provider policy](docs/PROVIDER_POLICY.md).
+See [architecture and decisions](ARCHITECTURE.md), [requirements scope](REQUIREMENTS.md) and [provider policy](PROVIDER_POLICY.md).
 
 ## Database
 
@@ -180,14 +180,14 @@ export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
 
 Browser smoke is opt-in for ordinary Maven tests. It starts the actual backend on a random port, Vite on 5174, and disposable PostgreSQL, then runs separate original-catalog and demo-collection journeys. Positive API responses are not mocked. Test-only images are mocked in the original fixture journey; demo images come from the backend. No live third-party API or model is contacted. `CLOSIE_NODE` can supply an absolute Node executable.
 
-The CI workflow runs backend/database/browser tests and frontend build on GitHub Actions, but has not been pushed or remotely executed. See [verification](docs/VERIFICATION.md) for the actual local results and explicit verification limits. Format frontend with `pnpm format`.
+The CI workflow runs backend/database/browser tests and frontend build on GitHub Actions, but has not been pushed or remotely executed. See [verification](VERIFICATION.md) for the actual local results and explicit verification limits. Format frontend with `pnpm format`.
 
 ## Screenshots
 
 Sample collection only — original illustrations and fictional prices, not live merchandise.
 
-![Sample Discover](docs/screenshots/discover.png)
-![Sample Style](docs/screenshots/style.png)
+![Sample Discover](screenshots/discover.png)
+![Sample Style](screenshots/style.png)
 
 ## Remaining limitations and expansion
 

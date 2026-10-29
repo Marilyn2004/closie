@@ -30,3 +30,7 @@ Historical evidence: one OpenAI image request succeeded on 2026-10-28, estimated
 - Existing private assets still need durable volume/object storage if private generation is ever hosted. The public demo uses only bundled images.
 - Source publication still requires the owner's license choice; no public repository publication is performed.
 - Next step after successful local release checks: user approval of the target hosting/cost and a separate public-demo deployment. Do not repurpose the existing production service.
+
+## First PR preparation — 2026-10-28
+
+On incoming HEAD `1c1b784`, a documentation-only cleanup reconciled historical retail/eBay/Railway reports with the shipped public demo, removed current-doc local paths, and documented compatibility, licensing and publication limits. No runtime code, migrations, user data or tracked image changed. Full local regression reran successfully: 152 JUnit items (0 failures/errors/skips), 14 Playwright cases and frontend production build. See `docs/PR_PREPARATION.md` and `docs/PR_DRAFT.md` for scope/evidence and the proposed PR. The existing GitHub repository is public; push/PR creation, merge and cloud deployment still require separate explicit approval.

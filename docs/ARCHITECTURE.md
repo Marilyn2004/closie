@@ -1,4 +1,18 @@
-# Architecture and interview notes
+# Closie Demo v1.0 architecture
+
+The current public experience is React/Vite → Spring MVC studio APIs → structured concept/outfit services → PostgreSQL/pgvector. The production Dockerfile bundles the frontend and seven immutable original images into a single Java 21 / Spring Boot artifact. No separate frontend runtime or image volume is needed for this mode.
+
+- `StudioService`, `DemoConceptSearch` and `PublicDemoCatalog` provide bounded existing-concept retrieval, preference ranking, anchor-locked outfits, immutable shared samples and copy-on-edit boards.
+- `StudioStore` stores browser-scoped documents/revisions. The browser holds an opaque capability; only its hash is used for ownership. This is not login or cross-device sync.
+- `PublicDemoPolicy`, the HTTP allowlist, model gateways and job worker independently prevent public paid/private operations. Use only `public-demo` with a dedicated `closie_public_demo` database and no provider credentials.
+- Private local studio retains structured design briefs, OpenAI/Gemini provider adapters, uploads and jobs. Its generated assets need separate persistent storage if ever hosted. Do not expose private mode as a public deployment.
+- V1–V5 retain retail/import/notification storage; V6–V8 add studio documents, revisions, jobs and durable image-spend reservations. No applied migration was rewritten.
+
+Search and styling are explainable rules over a small capsule, not embeddings or a trained recommender. Public mutations have bounded inputs/storage but no production-grade per-IP rate limiting or account system. Cloud HTTPS, backups and sustained resource behavior require later deployment verification. See [current deployment plan](PUBLIC_DEMO_DEPLOYMENT.md) and [release evidence](PUBLIC_DEMO_RELEASE.md).
+
+## Retained retail architecture (historical V2)
+
+The following notes describe the separate retail subsystem, not the public concept demo.
 
 React/Vite → thin MVC controllers → validated user preferences / catalog specifications / outfit service → PostgreSQL.
 
