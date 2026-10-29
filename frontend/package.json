@@ -1,0 +1,23 @@
+{
+  "name": "closie",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:smoke": "playwright test",
+    "format": "prettier --write src tests *.js index.html package.json"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "prettier": "^3.9.10",
+    "vite": "^7.1.12"
+  }
+}

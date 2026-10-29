@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT"
+MODE="${1:-studio}"
+OPENAI_VERIFY=false
+if [[ "$MODE" == "openai" ]]; then OPENAI_VERIFY=true; MODE=studio; fi
+STATE="$ROOT/.local"
+BACKEND_PORT=8080 FRONTEND_PORT=5173
+if [[ "$MODE" == "public-demo" || "$MODE" == "stop-public" ]]; then STATE="$STATE/public-demo"; BACKEND_PORT=8082; FRONTEND_PORT=5176; fi
+if [[ "$MODE" == "stop-public" ]]; then MODE=stop; fi
+mkdir -p "$STATE"
+if [[ "$MODE" == "stop" ]]; then
+  for service in frontend backend; do
+    if [[ -f "$STATE/$service.pid" ]]; then
+      pid="$(cat "$STATE/$service.pid")"
+      if kill -0 "$pid" 2>/dev/null; then
+        command_line="$(ps -p "$pid" -o command=)"
+        if [[ "$command_line" == *"$ROOT"* ]]; then kill "$pid"; fi
+      fi
+    fi
+  done
+  echo "Closie application processes stopped. Database and data are preserved."
+  exit 0
+fi
+if [[ "$MODE" != "demo" && "$MODE" != "live" && "$MODE" != "studio" && "$MODE" != "public-demo" ]]; then echo "Usage: ./dev [studio|openai|public-demo|demo|live|stop|stop-public]"; exit 1; fi
+if [[ -f .env.local ]]; then
+  set -a
+  source .env.local
+  set +a
+fi
+if [[ "$OPENAI_VERIFY" == true ]]; then
+  [[ -n "${OPENAI_API_KEY:-}" ]] || { echo "Set OPENAI_API_KEY in this terminal first. Never paste it into a command or chat."; exit 1; }
+  export CLOSIE_IMAGE_PROVIDER=openai CLOSIE_GENERATION_ENABLED=true
+  export CLOSIE_OPENAI_MAX_PAID_REQUESTS="${CLOSIE_OPENAI_MAX_PAID_REQUESTS:-1}"
+  export CLOSIE_AI_ENABLED=false CLOSIE_TEXT_DAILY_LIMIT=0 CLOSIE_VISION_ENABLED=false
+fi
+# Use the already installed desktop runtime when this terminal has no Node/pnpm on PATH.
+RUNTIME_BASE="$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies"
+if ! command -v node >/dev/null 2>&1 && [[ -x "$RUNTIME_BASE/node/bin/node" ]]; then export PATH="$RUNTIME_BASE/node/bin:$PATH"; fi
+if ! command -v pnpm >/dev/null 2>&1 && [[ -x "$RUNTIME_BASE/bin/fallback/pnpm" ]]; then export PATH="$RUNTIME_BASE/bin/fallback:$PATH"; fi
+if [[ -z "${JAVA_HOME:-}" ]] && command -v /usr/libexec/java_home >/dev/null 2>&1; then
+  export JAVA_HOME="$(/usr/libexec/java_home -v 21 2>/dev/null || true)"
+fi
+if ! command -v node >/dev/null 2>&1 || ! command -v pnpm >/dev/null 2>&1; then
+  echo "Install Node 22.12+ and pnpm 11, or put them on PATH. See README."
+  exit 1
+fi
+command -v docker >/dev/null 2>&1 || { echo "Docker is required."; exit 1; }
+docker info >/dev/null 2>&1 || { echo "Start Docker/Colima first."; exit 1; }
+CONTAINER=closie-v2-local-db
+if docker container inspect "$CONTAINER" >/dev/null 2>&1; then
+  mapping="$(docker inspect -f '{{range (index .HostConfig.PortBindings "5432/tcp")}}{{.HostIp}}:{{.HostPort}}{{end}}' "$CONTAINER")"
+  [[ "$mapping" == "127.0.0.1:55432" ]] || { echo "Existing Closie container has an unexpected port mapping; refusing to connect."; exit 1; }
+  docker start "$CONTAINER" >/dev/null
+else
+  if lsof -nP -iTCP:55432 -sTCP:LISTEN >/dev/null 2>&1; then echo "Port 55432 is occupied by another service. No database changes made."; exit 1; fi
+  docker run -d --name "$CONTAINER" -e POSTGRES_DB=fashion_search -e POSTGRES_USER=fashion -e POSTGRES_PASSWORD=fashion -p 127.0.0.1:55432:5432 -v closie_v2_local_pgdata:/var/lib/postgresql/data pgvector/pgvector:pg17 >/dev/null
+fi
+for ((i=0;i<30;i++)); do if docker exec "$CONTAINER" pg_isready -U fashion >/dev/null 2>&1; then break; fi; sleep 1; done
+if [[ "$MODE" == "public-demo" ]]; then
+  docker exec -i "$CONTAINER" psql -U fashion -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+SELECT 'CREATE DATABASE closie_public_demo' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='closie_public_demo')\gexec
+SQL
+  export DB_URL=jdbc:postgresql://127.0.0.1:55432/closie_public_demo
+  export SPRING_PROFILES_ACTIVE=public-demo CLOSIE_PUBLIC_DEMO_ENABLED=true CLOSIE_STUDIO_ENABLED=true
+  export CLOSIE_GENERATION_ENABLED=false CLOSIE_AI_ENABLED=false CLOSIE_REFRESH_ENABLED=false CLOSIE_DEMO_ENABLED=false CLOSIE_VISION_ENABLED=false
+  export SERVER_PORT="$BACKEND_PORT" SERVER_ADDRESS=127.0.0.1 CLOSIE_API_URL="http://127.0.0.1:$BACKEND_PORT"
+  unset OPENAI_API_KEY GEMINI_API_KEY
+elif [[ "$MODE" == "studio" ]]; then
+  docker exec -i "$CONTAINER" psql -U fashion -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+SELECT 'CREATE DATABASE closie_studio' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='closie_studio')\gexec
+SQL
+  export DB_URL=jdbc:postgresql://127.0.0.1:55432/closie_studio
+  export SPRING_PROFILES_ACTIVE=studio
+  export CLOSIE_DEMO_ENABLED=false CLOSIE_REFRESH_ENABLED=false
+elif [[ "$MODE" == "demo" ]]; then
+  # This creates only the explicitly named demo DB, never drops or overwrites anything.
+  docker exec -i "$CONTAINER" psql -U fashion -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+SELECT 'CREATE DATABASE closie_demo' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='closie_demo')\gexec
+SQL
+  export DB_URL=jdbc:postgresql://127.0.0.1:55432/closie_demo
+  export SPRING_PROFILES_ACTIVE=demo
+  export CLOSIE_DEMO_ENABLED=true
+  export CLOSIE_REFRESH_ENABLED=false
+else
+  export DB_URL=jdbc:postgresql://127.0.0.1:55432/fashion_search
+  export SPRING_PROFILES_ACTIVE=default
+  export CLOSIE_DEMO_ENABLED=false
+fi
+export DB_USERNAME=fashion DB_PASSWORD=fashion
+if [[ ! -d frontend/node_modules ]]; then (cd frontend && env -u OPENAI_API_KEY -u GEMINI_API_KEY pnpm install --frozen-lockfile); fi
+# Compile first; direct Java execution gives the launcher a PID it can safely manage.
+./mvnw -q -DskipTests compile dependency:build-classpath -Dmdep.outputFile="$STATE/classpath"
+CLASSPATH="$ROOT/target/classes:$(cat "$STATE/classpath")"
+for port in "$BACKEND_PORT" "$FRONTEND_PORT"; do
+  if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then echo "Port $port is already in use. Run ./dev stop for this checkout, or stop the other service."; exit 1; fi
+done
+nohup "${JAVA_HOME:+$JAVA_HOME/bin/}java" -cp "$CLASSPATH" com.fashionsearch.FashionSearchApplication > "$STATE/backend.log" 2>&1 &
+BACKEND_PID="$!"
+echo "$BACKEND_PID" > "$STATE/backend.pid"
+FRONTEND_PID=""
+trap 'kill "$BACKEND_PID" ${FRONTEND_PID:+"$FRONTEND_PID"} 2>/dev/null || true' EXIT
+trap 'exit 0' INT TERM
+for ((i=0;i<45;i++)); do
+  if curl -fsS http://127.0.0.1:$BACKEND_PORT/api/status > "$STATE/status.json" 2>/dev/null; then break; fi
+  if ! kill -0 "$(cat "$STATE/backend.pid")" 2>/dev/null; then echo "Backend failed. See .local/backend.log"; exit 1; fi
+  sleep 1
+done
+curl -fsS http://127.0.0.1:$BACKEND_PORT/api/status >/dev/null || { echo "Backend startup timed out. See .local/backend.log"; exit 1; }
+nohup env -u OPENAI_API_KEY -u GEMINI_API_KEY node "$ROOT/frontend/node_modules/vite/bin/vite.js" "$ROOT/frontend" --host 127.0.0.1 --port "$FRONTEND_PORT" > "$STATE/frontend.log" 2>&1 &
+FRONTEND_PID="$!"
+echo "$FRONTEND_PID" > "$STATE/frontend.pid"
+for ((i=0;i<20;i++)); do if curl -fsS http://127.0.0.1:$FRONTEND_PORT >/dev/null 2>&1; then break; fi; sleep 1; done
+curl -fsS http://127.0.0.1:$FRONTEND_PORT/api/status >/dev/null || { echo "Frontend startup failed. See .local/frontend.log"; exit 1; }
+echo "Closie is ready: http://127.0.0.1:$FRONTEND_PORT ($MODE mode)"
+if [[ "$MODE" == "public-demo" ]]; then STOP_MODE=stop-public; else STOP_MODE=stop; fi
+echo "Logs: $STATE/backend.log and $STATE/frontend.log. Stop app: ./dev $STOP_MODE"
+
+# Keep a visible development session alive; closing it stops only these owned application processes.
+wait "$BACKEND_PID" "$FRONTEND_PID"

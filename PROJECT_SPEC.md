@@ -1,3 +1,5 @@
+> Historical V1 specification. Closie V2 product direction and implementation are documented in README.md and docs/ARCHITECTURE.md; those supersede conflicting scope/non-goals below.
+
 # AI Fashion Search Engine
 
 ## 1. Project Overview

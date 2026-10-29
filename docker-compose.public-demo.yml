@@ -1,0 +1,29 @@
+# Local production-artifact rehearsal only; never points at the existing private DB.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: closie_public_demo
+      POSTGRES_USER: closie_demo
+      POSTGRES_PASSWORD: ${PUBLIC_DEMO_DB_PASSWORD:?Set a local rehearsal database password}
+    volumes:
+      - closie_public_demo_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U closie_demo -d closie_public_demo"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:8083:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: public-demo
+      DB_URL: jdbc:postgresql://db:5432/closie_public_demo
+      DB_USERNAME: closie_demo
+      DB_PASSWORD: ${PUBLIC_DEMO_DB_PASSWORD:?Set a local rehearsal database password}
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  closie_public_demo_pgdata:

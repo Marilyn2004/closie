@@ -1,0 +1,38 @@
+name: Closie checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11'
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: frontend
+      - run: pnpm build
+        working-directory: frontend
+      - run: ./mvnw --batch-mode test
+        env:
+          CLOSIE_BROWSER_SMOKE: 'true'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: closie-test-results
+          path: |
+            target/surefire-reports/
+            target/*browser-smoke.log
+            .local/screenshots/

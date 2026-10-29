@@ -1,0 +1,31 @@
+# Local concept workspace. No retail import or demo catalog seeding.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:55432/closie_studio}
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 9MB
+closie:
+  studio:
+    enabled: true
+    asset-path: ${CLOSIE_ASSET_PATH:.local/studio-assets}
+    image-provider: ${CLOSIE_IMAGE_PROVIDER:openai}
+    openai:
+      key: ${OPENAI_API_KEY:}
+      model: ${OPENAI_IMAGE_MODEL:gpt-image-2.5-flare-2026-09-08}
+      max-paid-requests: ${CLOSIE_OPENAI_MAX_PAID_REQUESTS:12}
+    generation-enabled: ${CLOSIE_GENERATION_ENABLED:false}
+    key: ${GEMINI_API_KEY:}
+    vision-enabled: ${CLOSIE_VISION_ENABLED:false}
+    vision-model: ${GEMINI_VISION_MODEL:}
+    image-model: ${GEMINI_IMAGE_MODEL:}
+    text-daily-limit: ${CLOSIE_TEXT_DAILY_LIMIT:0}
+    daily-limit: ${CLOSIE_GENERATION_DAILY_LIMIT:12}
+  refresh:
+    enabled: false
+  demo:
+    enabled: false
+
+server:
+  address: 127.0.0.1

@@ -1,0 +1,19 @@
+# Template only. Do not run until DNS, hosting and deletion behavior are approved.
+# Run on the SAME host as the Spring backend; bind its port 8080 to loopback.
+# Caddy needs inbound 80/443 and an actual domain to provision HTTPS.
+{$CLOSIE_WEBHOOK_HOST} {
+    @callback {
+        path /api/ebay/account-deletion
+        method GET POST
+    }
+    handle @callback {
+        request_body {
+            max_size 16KB
+        }
+        reverse_proxy 127.0.0.1:8080
+    }
+    handle {
+        respond "Not found" 404
+    }
+    # Do not enable request body/header logging: notifications contain account data.
+}
